@@ -2026,10 +2026,60 @@ class OPS243Radar:
                 several candidate reflections so the caller can pick the
                 club head.
         """
+        # X=2 (256-point FFT) trades speed resolution for report rate, keeping
+        # enough reports across the ~100ms of a swing to find its peak.
+        # Outbound only: the downswing moves away from a radar placed behind
+        # the player, so R- drops the backswing.
+        self._configure_cw_speed_stream(
+            label="swing speed training",
+            fft_size=2,
+            direction=Direction.OUTBOUND,
+            min_speed_mph=min_speed_mph,
+            num_reports=num_reports,
+        )
+
+    def configure_for_pitch_speed(self, min_speed_mph: float = 30, num_reports: int = 8):
+        """
+        Configure the radar for fastpitch pitch speed, radar-gun style.
+
+        Shares the CW-only, no-flash setup of configure_for_swing_speed_training()
+        but is its own entry point, so tuning one mode cannot change the other.
+
+        Pitches approach a radar mounted behind home plate, so this filters to
+        inbound only (R+). A pitch stays in the beam far longer than a ~100ms
+        swing, so it uses X=4 (512-point FFT, ~0.8 mph per bin) instead of X=2.
+
+        Args:
+            min_speed_mph: Ignore inbound reports below this speed (R>n).
+            num_reports: Speed reports per sample cycle (On). >1 surfaces
+                several candidate reflections so the caller can pick the ball.
+        """
+        self._configure_cw_speed_stream(
+            label="pitch speed",
+            fft_size=4,
+            direction=Direction.INBOUND,
+            min_speed_mph=min_speed_mph,
+            num_reports=num_reports,
+        )
+
+    def _configure_cw_speed_stream(
+        self,
+        label: str,
+        fft_size: int,
+        direction: Direction,
+        min_speed_mph: float,
+        num_reports: int,
+    ):
+        """Apply the CW speed-streaming setup shared by swing and pitch speed modes.
+
+        Only the FFT size and direction filter vary by mode. See
+        configure_for_swing_speed_training() for why this sends GS and never
+        GC/S#n/S! or A!.
+        """
         if not self.serial or not self.serial.is_open:
             raise ConnectionError("Not connected to radar")
 
-        logger.info("[OPS] Configuring for swing speed training (CW speed reporting)...")
+        logger.info("[OPS] Configuring for %s (CW speed reporting)...", label)
 
         # CW mode, then idle while we reconfigure.
         self._send_command("GS")
@@ -2042,12 +2092,12 @@ class OPS243Radar:
         self.set_units(SpeedUnit.MPH)
         logger.info("[OPS] Units: MPH")
 
-        # Max transmit power: the club head is a smaller, less reflective
-        # target than a ball, and there is no rolling-buffer capture to clip.
+        # Max transmit power: club heads and distant balls are weak targets,
+        # and there is no rolling-buffer capture to clip.
         self.set_transmit_power(0)
         logger.info("[OPS] Transmit power: max (P0)")
 
-        # 30ksps -> 208mph ceiling, above any club head speed (AN-027 Table 1).
+        # 30ksps -> 208mph ceiling, above any club head or pitch (AN-027 Table 1).
         self.set_sample_rate(30000)
         time.sleep(0.1)
         logger.info("[OPS] Sample rate: 30ksps")
@@ -2056,17 +2106,12 @@ class OPS243Radar:
         time.sleep(0.1)
         logger.info("[OPS] Buffer size: 128")
 
-        # X=2 (256-point FFT) trades speed resolution for report rate, keeping
-        # enough reports across the ~100ms of a swing to find its peak.
-        self.set_fft_size(2)
+        self.set_fft_size(fft_size)
         time.sleep(0.1)
-        logger.info("[OPS] FFT size: 256 (X=2)")
+        logger.info("[OPS] FFT size: %d (X=%d)", 128 * fft_size, fft_size)
 
-        # Outbound only: the downswing moves away from a radar placed behind
-        # the player, so R- drops the backswing.
-        self._send_command("R-")
+        self.set_direction_filter(direction)
         time.sleep(0.05)
-        logger.info("[OPS] Direction filter: outbound only (R-)")
 
         self.set_min_speed_filter(min_speed_mph)
         time.sleep(0.05)
@@ -2085,7 +2130,7 @@ class OPS243Radar:
 
         self._send_command("PA")
         time.sleep(0.1)
-        logger.info("[OPS] Swing speed training mode ready (PA)")
+        logger.info("[OPS] %s mode ready (PA)", label.capitalize())
 
     def configure_for_speed_trigger(self):
         """

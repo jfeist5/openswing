@@ -70,7 +70,13 @@ from .sim import (
 from .speed_correction import correct_ball_speed
 from .spin_estimate import calculated_spin_rpm
 from .startup_status import StartupStatusReporter, configured_startup_components
-from .swing_speed import SwingSpeedEvent
+from .swing_speed import (
+    PITCH_IMPLEMENT,
+    PITCH_IMPLEMENT_LABEL,
+    PITCH_MAX_SPEED_MPH,
+    PITCH_TRIGGER_THRESHOLD_MPH,
+    SwingSpeedEvent,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -1818,7 +1824,7 @@ def _get_trigger_status() -> dict:
     stats = session_logger.stats if session_logger else {}
 
     if is_swing_speed:
-        mode = "swing-speed"
+        mode = monitor.MODE
     elif mock_mode:
         mode = "mock"
     else:
@@ -4107,9 +4113,11 @@ def start_monitor(
     swing_speed_kwargs: Optional[dict] = None,
     ops_baud: Optional[int] = None,
     mock_enrichment_ms: float = 0.0,
+    pitch_speed_mode: bool = False,
+    pitch_speed_kwargs: Optional[dict] = None,
 ):
     """
-    Start the monitor in launch monitor or swing speed mode.
+    Start the monitor in launch monitor, swing speed, or pitch speed mode.
 
     Args:
         port: Serial port for radar
@@ -4124,6 +4132,15 @@ def start_monitor(
 
     if trigger_type == "hardware" and sample_rate_ksps != 30:
         raise ValueError("Hardware trigger mode requires a 30 ksps sample rate")
+    if swing_speed_mode and pitch_speed_mode:
+        raise ValueError("Swing speed and pitch speed modes cannot run together")
+    speed_stream_mode = swing_speed_mode or pitch_speed_mode
+    if pitch_speed_mode:
+        monitor_mode = "pitch-speed"
+    elif swing_speed_mode:
+        monitor_mode = "swing-speed"
+    else:
+        monitor_mode = "mock" if mock else "rolling-buffer"
 
     # Stop any existing monitor first
     if monitor is not None:
@@ -4131,9 +4148,12 @@ def start_monitor(
         stop_monitor()
 
     mock_mode = mock
-    mock_swing_speed_mode = bool(mock and swing_speed_mode)
+    mock_swing_speed_mode = bool(mock and speed_stream_mode)
     debug_mode = debug
-    if mock and swing_speed_mode:
+    if mock and pitch_speed_mode:
+        monitor = MockPitchSpeedMonitor(**(pitch_speed_kwargs or {}))
+        print("[MODE] Mock pitch speed mode")
+    elif mock and swing_speed_mode:
         monitor = MockSwingSpeedMonitor(**(swing_speed_kwargs or {}))
         print("[MODE] Mock swing speed training mode")
     elif mock:
@@ -4147,6 +4167,14 @@ def start_monitor(
             **(swing_speed_kwargs or {}),
         )
         print("[MODE] Swing speed training mode")
+    elif pitch_speed_mode:
+        from .swing_speed import PitchSpeedMonitor
+
+        monitor = PitchSpeedMonitor(
+            port=port,
+            **(pitch_speed_kwargs or {}),
+        )
+        print("[MODE] Pitch speed mode")
     else:
         from .rolling_buffer import RollingBufferMonitor
 
@@ -4172,10 +4200,16 @@ def start_monitor(
             "min_speed": int(swing_config.get("trigger_threshold_mph", 30)),
             "max_speed": int(swing_config.get("max_speed_mph") or 0),
         }
+    elif pitch_speed_mode:
+        radar_config = {
+            **radar_config,
+            "min_speed": int(monitor.trigger_threshold_mph),
+            "max_speed": int(monitor.max_speed_mph or 0),
+        }
 
     logger.info(
         "[SERVER] Starting monitor: mode=%s, trigger=%s, sample_rate=%dksps",
-        "swing-speed" if swing_speed_mode else ("mock" if mock else "rolling-buffer"),
+        monitor_mode,
         trigger_type,
         sample_rate_ksps,
     )
@@ -4190,8 +4224,8 @@ def start_monitor(
             camera_enabled=camera_capture_runtime is not None,
             camera_model="capture" if camera_capture_runtime is not None else None,
             config=_session_start_config(),
-            mode="swing-speed" if swing_speed_mode else ("mock" if mock else "rolling-buffer"),
-            trigger_type=None if swing_speed_mode or mock else trigger_type,
+            mode=monitor_mode,
+            trigger_type=None if speed_stream_mode or mock else trigger_type,
         )
         if not mock and radar_info:
             session_logger.log_connection(
@@ -4205,7 +4239,7 @@ def start_monitor(
             # anchor K-LD7 correlation to the OPS trigger_time instead of the
             # USB first-byte arrival time.
             radar = getattr(monitor, "radar", None)
-            if not swing_speed_mode and radar is not None and hasattr(radar, "read_clock_sync"):
+            if not speed_stream_mode and radar is not None and hasattr(radar, "read_clock_sync"):
                 try:
                     clock_sync = radar.read_clock_sync()
                     session_logger.log_clock_sync(
@@ -4234,7 +4268,7 @@ def start_monitor(
                 sample_hz=inclinometer_runtime_config.get("sample_hz", 10.0),
             )
 
-    if swing_speed_mode:
+    if speed_stream_mode:
         monitor.start(
             event_callback=on_swing_speed_detected,
             live_callback=on_live_reading,
@@ -4575,6 +4609,8 @@ class _MockSwingRadar:
 class MockSwingSpeedMonitor:
     """Mock swing speed monitor for UI development without OPS hardware."""
 
+    MODE = "swing-speed"
+
     def __init__(
         self,
         trigger_threshold_mph: float = 30.0,
@@ -4623,8 +4659,7 @@ class MockSwingSpeedMonitor:
         upper = max(lower + 1.0, upper)
 
         if peak_speed is None:
-            center = min(max(lower + 35.0, 95.0), upper - 4.0)
-            peak_speed = random.gauss(center, 6.0)
+            peak_speed = self._random_peak_speed(lower, upper)
 
         peak_speed = max(lower, min(upper, float(peak_speed)))
         trigger_speed = max(lower, min(peak_speed, peak_speed - random.uniform(12.0, 24.0)))
@@ -4639,6 +4674,7 @@ class MockSwingSpeedMonitor:
             peak_magnitude=random.uniform(80.0, 450.0),
             training_implement=self.training_implement,
             training_implement_label=self.training_implement_label,
+            mode=self.MODE,
         )
         self._events.append(event)
 
@@ -4646,6 +4682,11 @@ class MockSwingSpeedMonitor:
             self._event_callback(event)
 
         return event
+
+    def _random_peak_speed(self, lower: float, upper: float) -> float:
+        """Draw a plausible club-head peak speed within the mock gates."""
+        center = min(max(lower + 35.0, 95.0), upper - 4.0)
+        return random.gauss(center, 6.0)
 
     def get_shots(self) -> List[Shot]:
         """Swing speed mode has no ball-flight shots."""
@@ -4691,6 +4732,35 @@ class MockSwingSpeedMonitor:
         """Set the training implement stamped onto future mock reps."""
         self.training_implement = implement
         self.training_implement_label = label
+
+
+class MockPitchSpeedMonitor(MockSwingSpeedMonitor):
+    """Mock fastpitch pitch speed monitor for UI development without OPS hardware."""
+
+    MODE = "pitch-speed"
+
+    def __init__(
+        self,
+        trigger_threshold_mph: float = PITCH_TRIGGER_THRESHOLD_MPH,
+        max_speed_mph: Optional[float] = PITCH_MAX_SPEED_MPH,
+        **kwargs,
+    ):
+        super().__init__(
+            trigger_threshold_mph=trigger_threshold_mph,
+            max_speed_mph=max_speed_mph,
+            **kwargs,
+        )
+        self.training_implement = PITCH_IMPLEMENT
+        self.training_implement_label = PITCH_IMPLEMENT_LABEL
+
+    def get_radar_info(self):
+        """Return mock radar metadata."""
+        return {"Version": "mock-pitch-speed"}
+
+    def _random_peak_speed(self, lower: float, upper: float) -> float:
+        """Draw a plausible fastpitch peak speed within the mock gates."""
+        center = min(max(lower + 15.0, 55.0), upper - 4.0)
+        return random.gauss(center, 5.0)
 
 
 def _add_ballistics_arguments(parser):
@@ -4759,6 +4829,11 @@ def main():
         "--mock-swing-speed",
         action="store_true",
         help="Run swing speed training mode with simulated reps and no OPS radar",
+    )
+    parser.add_argument(
+        "--mock-pitch-speed",
+        action="store_true",
+        help="Run fastpitch pitch speed mode with simulated pitches and no OPS radar",
     )
     parser.add_argument(
         "--mock-enrichment-ms",
@@ -4979,6 +5054,26 @@ def main():
         type=float,
         default=100.0,
         help="Cooldown after an ignored short motion before re-arming (default: 100)",
+    )
+    parser.add_argument(
+        "--pitch-speed",
+        action="store_true",
+        help="Run fastpitch pitch speed mode (radar behind home plate, inbound pitches)",
+    )
+    parser.add_argument(
+        "--pitch-speed-threshold",
+        type=float,
+        default=None,
+        help=f"Inbound speed that starts a pitch (default: {PITCH_TRIGGER_THRESHOLD_MPH:g} mph)",
+    )
+    parser.add_argument(
+        "--pitch-speed-max",
+        type=float,
+        default=None,
+        help=(
+            "Maximum plausible pitch speed accepted from OPS reports; use 0 to disable "
+            f"(default: {PITCH_MAX_SPEED_MPH:g} mph)"
+        ),
     )
     parser.add_argument(
         "--sound-pre-trigger",
@@ -5219,8 +5314,17 @@ def main():
         parser.error("--kld7-mount-tilt is required when --kld7 is passed")
     if args.mock_enrichment_ms < 0:
         parser.error("--mock-enrichment-ms must not be negative")
-    if args.mock_enrichment_ms > 0 and (not args.mock or args.mock_swing_speed):
+    if args.mock_enrichment_ms > 0 and (
+        not args.mock or args.mock_swing_speed or args.mock_pitch_speed
+    ):
         parser.error("--mock-enrichment-ms requires --mock (launch monitor mode)")
+    if (args.swing_speed or args.mock_swing_speed) and (args.pitch_speed or args.mock_pitch_speed):
+        parser.error("swing speed and pitch speed modes cannot be combined")
+    if args.pitch_speed and args.mock:
+        parser.error(
+            "--pitch-speed requires real OPS243 radar hardware; "
+            "use --mock-pitch-speed for UI testing"
+        )
     if args.mock_swing_speed:
         args.mock = True
         args.swing_speed = True
@@ -5228,6 +5332,32 @@ def main():
         parser.error(
             "--swing-speed requires real OPS243 radar hardware; use --mock-swing-speed for UI testing"
         )
+    if args.mock_pitch_speed:
+        args.mock = True
+        args.pitch_speed = True
+    pitch_speed_kwargs = {}
+    if args.pitch_speed_threshold is not None or args.pitch_speed_max is not None:
+        if not args.pitch_speed:
+            parser.error("--pitch-speed-threshold/--pitch-speed-max require --pitch-speed")
+        pitch_threshold = (
+            PITCH_TRIGGER_THRESHOLD_MPH
+            if args.pitch_speed_threshold is None
+            else args.pitch_speed_threshold
+        )
+        pitch_max = PITCH_MAX_SPEED_MPH if args.pitch_speed_max is None else args.pitch_speed_max
+        if pitch_threshold <= 0:
+            parser.error("--pitch-speed-threshold must be greater than 0")
+        if pitch_max < 0:
+            parser.error("--pitch-speed-max must be 0 (disabled) or greater than the threshold")
+        if 0 < pitch_max <= pitch_threshold:
+            parser.error(
+                f"--pitch-speed-max ({pitch_max:g}) must be greater than "
+                f"the pitch threshold ({pitch_threshold:g}), or 0 to disable"
+            )
+        if args.pitch_speed_threshold is not None:
+            pitch_speed_kwargs["trigger_threshold_mph"] = pitch_threshold
+        if args.pitch_speed_max is not None:
+            pitch_speed_kwargs["max_speed_mph"] = None if pitch_max == 0 else pitch_max
 
     if args.iwr6843 and args.kld7:
         parser.error("--iwr6843 and vertical --kld7 cannot both own launch angle")
@@ -5537,6 +5667,8 @@ def main():
             swing_speed_kwargs=swing_speed_kwargs,
             ops_baud=args.ops_baud,
             mock_enrichment_ms=args.mock_enrichment_ms,
+            pitch_speed_mode=args.pitch_speed,
+            pitch_speed_kwargs=pitch_speed_kwargs,
         )
     except Exception:
         monitor_recovery = (
@@ -5594,6 +5726,8 @@ def main():
         print("Simulate shots via WebSocket or API")
     if args.swing_speed:
         print("Running in SWING SPEED mode - no ball impact trigger required")
+    if args.pitch_speed:
+        print("Running in PITCH SPEED mode - fastpitch, radar behind home plate")
 
     print(f"Server starting at http://{args.host}:{args.web_port}")
     print()

@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from openflight.ops243 import Direction, SpeedReading
-from openflight.swing_speed import SwingSpeedEvent, SwingSpeedMonitor
+from openflight.swing_speed import PitchSpeedMonitor, SwingSpeedEvent, SwingSpeedMonitor
 
 
 def test_build_event_uses_peak_outbound_speed_and_magnitude():
@@ -414,3 +414,119 @@ def test_capture_loop_with_subclass_direction_emits_tagged_event(monkeypatch):
     assert events[0].peak_speed_mph == 63.0
     assert events[0].reading_count == 3
     assert events[0].mode == "test-inbound"
+
+
+def test_pitch_speed_monitor_is_inbound_swing_speed_subclass():
+    """Server isinstance(SwingSpeedMonitor) checks must keep covering pitch mode."""
+    assert issubclass(PitchSpeedMonitor, SwingSpeedMonitor)
+    assert PitchSpeedMonitor.DIRECTION == Direction.INBOUND
+    assert PitchSpeedMonitor.MODE == "pitch-speed"
+
+
+def test_pitch_speed_monitor_fastpitch_defaults():
+    """Fastpitch limits replace swing's; the other event gates are inherited."""
+    monitor = PitchSpeedMonitor()
+
+    assert monitor.trigger_threshold_mph == 30.0
+    assert monitor.max_speed_mph == 80.0
+    assert monitor.min_readings == 3
+    assert monitor.single_reading_peak_mph == 60.0
+    assert monitor.num_reports == 8
+    assert monitor.end_quiet_ms == 1000.0
+    assert monitor.cooldown_ms == 750.0
+    assert monitor.training_implement == "pitch"
+    assert monitor.training_implement_label == "Pitch"
+
+
+def test_pitch_speed_monitor_accepts_overrides():
+    """CLI overrides reach the pitch monitor, including a disabled ceiling."""
+    monitor = PitchSpeedMonitor(port="/dev/ops", trigger_threshold_mph=40.0, max_speed_mph=None)
+
+    assert monitor.trigger_threshold_mph == 40.0
+    assert monitor.max_speed_mph is None
+
+
+def test_pitch_speed_connect_uses_pitch_radar_setup(monkeypatch):
+    """Pitch mode must configure inbound pitch streaming, never the swing setup."""
+    calls = []
+
+    class FakeRadar:
+        def __init__(self, port=None):
+            self.port = port
+
+        def connect(self):
+            calls.append(("connect", None))
+
+        def configure_for_pitch_speed(self, min_speed_mph=None, num_reports=None):
+            calls.append(("configure_for_pitch_speed", (min_speed_mph, num_reports)))
+
+        def configure_for_swing_speed_training(self, **_kwargs):
+            raise AssertionError("pitch mode must not use the swing-speed setup")
+
+    monkeypatch.setattr("openflight.swing_speed.OPS243Radar", FakeRadar)
+
+    assert PitchSpeedMonitor(port="/dev/ops").connect() is True
+    assert calls == [("connect", None), ("configure_for_pitch_speed", (30.0, 8))]
+
+
+def test_pitch_speed_disconnect_restores_rolling_buffer_mode(monkeypatch):
+    """Leaving pitch mode must hand the OPS back to the golf launch monitor."""
+    calls = []
+
+    class FakeRadar:
+        def __init__(self, port=None):
+            self.port = port
+
+        def restore_rolling_buffer_mode(self):
+            calls.append("restore_rolling_buffer_mode")
+
+        def disconnect(self):
+            calls.append("disconnect")
+
+    monkeypatch.setattr("openflight.swing_speed.OPS243Radar", FakeRadar)
+
+    PitchSpeedMonitor().disconnect()
+
+    assert calls == ["restore_rolling_buffer_mode", "disconnect"]
+
+
+def test_capture_loop_emits_pitch_event_for_inbound_pitch(monkeypatch):
+    """An inbound pitch becomes one pitch-speed event at its peak radial speed."""
+    script = [[_inbound(41.0)], [_inbound(58.0)], [_inbound(62.0)], [_inbound(61.0)]]
+
+    _, events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
+
+    assert len(events) == 1
+    event = events[0]
+    assert event.peak_speed_mph == 62.0
+    assert event.trigger_speed_mph == 41.0
+    assert event.reading_count == 4
+    assert event.mode == "pitch-speed"
+    assert event.training_implement_label == "Pitch"
+
+
+def test_capture_loop_pitch_ignores_outbound_motion(monkeypatch):
+    """Batted balls and the catcher's return throw move away and must not count."""
+    script = [[_outbound(70.0)], [_outbound(72.0)], [_outbound(68.0)]]
+
+    _, events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
+
+    assert events == []
+
+
+def test_capture_loop_pitch_rejects_speeds_above_fastpitch_max(monkeypatch):
+    """Inbound readings above the 80 mph ceiling are treated as implausible."""
+    script = [[_inbound(95.0)], [_inbound(97.0)], [_inbound(96.0)]]
+
+    _, events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
+
+    assert events == []
+
+
+def test_capture_loop_pitch_ignores_slow_inbound_motion(monkeypatch):
+    """The pitcher's stride and other slow inbound motion stays below the trigger."""
+    script = [[_inbound(12.0)], [_inbound(18.0)], [_inbound(29.9)]]
+
+    _, events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
+
+    assert events == []

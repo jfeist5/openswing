@@ -13,6 +13,12 @@ from .session_logger import log_session_error
 
 logger = logging.getLogger("openflight.swing_speed")
 
+# Fastpitch radar-gun limits: below youth pitch speeds, above the women's record.
+PITCH_TRIGGER_THRESHOLD_MPH = 30.0
+PITCH_MAX_SPEED_MPH = 80.0
+PITCH_IMPLEMENT = "pitch"
+PITCH_IMPLEMENT_LABEL = "Pitch"
+
 
 @dataclass
 class SwingSpeedEvent:
@@ -287,4 +293,38 @@ class SwingSpeedMonitor:
             training_implement_label=self.training_implement_label,
             unit=peak.unit,
             mode=self.MODE,
+        )
+
+
+class PitchSpeedMonitor(SwingSpeedMonitor):
+    """Monitor inbound OPS243 speed readings and emit fastpitch pitch speeds.
+
+    Reuses the swing-speed capture loop: each pitch is reported at the peak
+    inbound reading, like a radar gun, and never uses the rolling buffer.
+    """
+
+    DIRECTION = Direction.INBOUND
+    MODE = "pitch-speed"
+
+    def __init__(
+        self,
+        port: Optional[str] = None,
+        trigger_threshold_mph: float = PITCH_TRIGGER_THRESHOLD_MPH,
+        max_speed_mph: Optional[float] = PITCH_MAX_SPEED_MPH,
+        **kwargs,
+    ):
+        super().__init__(
+            port=port,
+            trigger_threshold_mph=trigger_threshold_mph,
+            max_speed_mph=max_speed_mph,
+            **kwargs,
+        )
+        self.training_implement = PITCH_IMPLEMENT
+        self.training_implement_label = PITCH_IMPLEMENT_LABEL
+
+    def _configure_radar(self):
+        """Apply the inbound-only pitch speed setup to the connected radar."""
+        self.radar.configure_for_pitch_speed(
+            min_speed_mph=self.trigger_threshold_mph,
+            num_reports=self.num_reports,
         )

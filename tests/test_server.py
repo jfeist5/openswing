@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import statistics
 import sys
 import threading
 from datetime import datetime
@@ -21,6 +22,7 @@ from openflight.ops243 import UART_BAUD_COMMANDS
 from openflight.power import PowerState
 from openflight.server import (
     MockLaunchMonitor,
+    MockPitchSpeedMonitor,
     MockSwingSpeedMonitor,
     estimate_launch_angle,
     on_shot_detected,
@@ -30,7 +32,7 @@ from openflight.server import (
     swing_speed_to_shot_dict,
 )
 from openflight.shot_stream import HEARTBEAT_FRAME, SSE_MIMETYPE, ShotStreamBroker
-from openflight.swing_speed import SwingSpeedEvent
+from openflight.swing_speed import PitchSpeedMonitor, SwingSpeedEvent, SwingSpeedMonitor
 
 
 def _wait_for_shot_finalization_idle(timeout_s: float = 2.0) -> None:
@@ -2086,6 +2088,242 @@ class TestSwingSpeedMode:
             f"previous ceiling active on the radar. Calls: {calls}"
         )
         assert server_module.radar_config["max_speed"] == 0
+
+
+class TestPitchSpeedMode:
+    """Pitch speed reuses the swing-speed server path with its own monitor and mode."""
+
+    @staticmethod
+    def _fake_session_logger(session):
+        class FakeSessionLogger:
+            def start_session(self, **kwargs):
+                session.update(kwargs)
+
+            def end_session(self):
+                pass
+
+            def log_connection(self, **kwargs):
+                session["connection"] = kwargs
+
+            def log_clock_sync(self, **kwargs):
+                session["clock_sync"] = kwargs
+
+        return FakeSessionLogger()
+
+    def test_start_monitor_uses_pitch_speed_monitor(self, monkeypatch):
+        """Pitch mode starts the pitch monitor on the swing-speed event callback."""
+        started = {}
+        session = {}
+
+        class FakePitchSpeedMonitor:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                self.trigger_threshold_mph = kwargs.get("trigger_threshold_mph", 30.0)
+                self.max_speed_mph = kwargs.get("max_speed_mph", 80.0)
+                self.radar = SimpleNamespace(baud=57600, read_clock_sync=lambda: {"ok": True})
+
+            def connect(self):
+                started["connected"] = True
+
+            def get_radar_info(self):
+                return {"Version": "test"}
+
+            def start(self, event_callback=None, live_callback=None):
+                started["event_callback"] = event_callback
+                started["live_callback"] = live_callback
+
+            def stop(self):
+                pass
+
+            def disconnect(self):
+                pass
+
+        monkeypatch.setattr(server_module, "monitor", None)
+        monkeypatch.setattr(
+            server_module, "get_session_logger", lambda: self._fake_session_logger(session)
+        )
+        monkeypatch.setattr("openflight.swing_speed.PitchSpeedMonitor", FakePitchSpeedMonitor)
+
+        server_module.start_monitor(
+            port="/dev/ops",
+            pitch_speed_mode=True,
+            pitch_speed_kwargs={"trigger_threshold_mph": 35.0},
+        )
+
+        assert server_module.monitor.kwargs == {"port": "/dev/ops", "trigger_threshold_mph": 35.0}
+        assert started["connected"] is True
+        assert started["event_callback"] is server_module.on_swing_speed_detected
+        assert started["live_callback"] is server_module.on_live_reading
+        assert session["mode"] == "pitch-speed"
+        assert session["trigger_type"] is None
+        assert "clock_sync" not in session
+        assert server_module.radar_config["min_speed"] == 35
+        assert server_module.radar_config["max_speed"] == 80
+
+        server_module.stop_monitor()
+
+    def test_start_monitor_uses_mock_pitch_speed_monitor(self, monkeypatch):
+        """Mock pitch mode exercises the pitch path with fastpitch defaults."""
+        session = {}
+        monkeypatch.setattr(server_module, "monitor", None)
+        monkeypatch.setattr(
+            server_module, "get_session_logger", lambda: self._fake_session_logger(session)
+        )
+
+        server_module.start_monitor(mock=True, pitch_speed_mode=True)
+
+        assert isinstance(server_module.monitor, MockPitchSpeedMonitor)
+        assert server_module.mock_mode is True
+        assert server_module.mock_swing_speed_mode is True
+        assert server_module.monitor.trigger_threshold_mph == 30.0
+        assert server_module.monitor.max_speed_mph == 80.0
+        assert session["mode"] == "pitch-speed"
+        assert server_module.radar_config["min_speed"] == 30
+        assert server_module.radar_config["max_speed"] == 80
+
+        server_module.stop_monitor()
+
+    def test_start_monitor_rejects_swing_and_pitch_together(self, monkeypatch):
+        """The two speed modes configure the radar in opposite directions."""
+        monkeypatch.setattr(server_module, "monitor", None)
+
+        with pytest.raises(ValueError, match="pitch"):
+            server_module.start_monitor(mock=True, swing_speed_mode=True, pitch_speed_mode=True)
+
+    def test_mock_pitch_speed_simulates_fastpitch_events(self):
+        """Simulated pitches stay inside the fastpitch gates and carry pitch metadata."""
+        emitted = []
+        monitor = MockPitchSpeedMonitor()
+        monitor.start(event_callback=emitted.append)
+
+        events = [monitor.simulate_shot() for _ in range(200)]
+
+        assert emitted == events
+        assert all(30.0 <= event.peak_speed_mph <= 80.0 for event in events)
+        assert 45.0 <= statistics.mean(event.peak_speed_mph for event in events) <= 65.0
+        assert {event.mode for event in events} == {"pitch-speed"}
+        shot = swing_speed_to_shot_dict(events[0])
+        assert shot["mode"] == "pitch-speed"
+        assert shot["club"] == "Pitch"
+
+    def test_mock_pitch_speed_honors_explicit_peak(self):
+        """An explicit simulated peak is clamped to the configured gates."""
+        monitor = MockPitchSpeedMonitor(trigger_threshold_mph=40.0, max_speed_mph=70.0)
+
+        assert monitor.simulate_shot(peak_speed=63.0).peak_speed_mph == 63.0
+        assert monitor.simulate_shot(peak_speed=95.0).peak_speed_mph == 70.0
+        assert monitor.simulate_shot(peak_speed=20.0).peak_speed_mph == 40.0
+
+    def test_mock_swing_speed_simulation_is_unchanged(self):
+        """Seeded swing mock reps match values captured before pitch mode existed."""
+        state = server_module.random.getstate()
+        server_module.random.seed(1234)
+        try:
+            monitor = MockSwingSpeedMonitor()
+            first = monitor.simulate_shot()
+            second = monitor.simulate_shot()
+        finally:
+            server_module.random.setstate(state)
+
+        assert first.peak_speed_mph == pytest.approx(101.32531785156343)
+        assert first.trigger_speed_mph == pytest.approx(89.23542021086038)
+        assert first.reading_count == 7
+        assert first.duration_ms == pytest.approx(883.1798578648664)
+        assert first.peak_magnitude == pytest.approx(336.44234337700266)
+        assert second.peak_speed_mph == pytest.approx(93.64665646549588)
+        assert second.reading_count == 5
+        assert {first.mode, second.mode} == {"swing-speed"}
+
+    @pytest.mark.parametrize(
+        ("monitor_factory", "expected_mode"),
+        [
+            (MockSwingSpeedMonitor, "swing-speed"),
+            (MockPitchSpeedMonitor, "pitch-speed"),
+        ],
+    )
+    def test_trigger_status_reports_speed_mode(self, monkeypatch, monitor_factory, expected_mode):
+        """The UI learns which speed mode is active from trigger status."""
+        monkeypatch.setattr(server_module, "monitor", monitor_factory())
+        monkeypatch.setattr(server_module, "mock_mode", True)
+        monkeypatch.setattr(server_module, "get_session_logger", lambda: None)
+
+        assert server_module._get_trigger_status()["mode"] == expected_mode  # pylint: disable=protected-access
+
+    def test_real_pitch_monitor_is_swing_speed_for_server_checks(self):
+        """isinstance(SwingSpeedMonitor) gates in server.py must cover pitch mode."""
+        assert issubclass(PitchSpeedMonitor, SwingSpeedMonitor)
+        assert issubclass(MockPitchSpeedMonitor, MockSwingSpeedMonitor)
+
+    @pytest.fixture(name="run_cli")
+    def _run_cli(self, monkeypatch):
+        """Run server main() with argv, capturing start_monitor kwargs."""
+        captured = {}
+        monkeypatch.setattr(
+            server_module, "start_monitor", lambda **kwargs: captured.update(kwargs)
+        )
+        monkeypatch.setattr(server_module, "load_sim_config", lambda: [])
+        monkeypatch.setattr(server_module, "build_connectors", lambda *args, **kwargs: [])
+        monkeypatch.setattr(server_module, "init_session_logger", lambda **kwargs: None)
+        monkeypatch.setattr(server_module, "_cleanup_hardware_for_shutdown", lambda: None)
+        monkeypatch.setattr(server_module.socketio, "run", lambda *args, **kwargs: None)
+
+        def run(*arguments):
+            monkeypatch.setattr(sys, "argv", ["openflight-server", "--no-logging", *arguments])
+            server_module.main()
+            return captured
+
+        return run
+
+    def test_cli_mock_pitch_speed_uses_monitor_defaults(self, run_cli):
+        """Without overrides, the CLI leaves fastpitch defaults to PitchSpeedMonitor."""
+        captured = run_cli("--mock-pitch-speed")
+
+        assert captured["mock"] is True
+        assert captured["pitch_speed_mode"] is True
+        assert captured["swing_speed_mode"] is False
+        assert captured["pitch_speed_kwargs"] == {}
+
+    def test_cli_pitch_speed_overrides(self, run_cli):
+        """Threshold and max flags pass through; max 0 disables the ceiling."""
+        captured = run_cli(
+            "--mock-pitch-speed", "--pitch-speed-threshold", "35", "--pitch-speed-max", "0"
+        )
+
+        assert captured["pitch_speed_kwargs"] == {
+            "trigger_threshold_mph": 35.0,
+            "max_speed_mph": None,
+        }
+
+    def test_cli_swing_speed_does_not_enable_pitch(self, run_cli):
+        """Swing speed CLI behavior is unchanged by the pitch flags."""
+        captured = run_cli("--mock-swing-speed")
+
+        assert captured["swing_speed_mode"] is True
+        assert captured["pitch_speed_mode"] is False
+
+    @pytest.mark.parametrize(
+        "arguments",
+        [
+            ("--pitch-speed", "--swing-speed"),
+            ("--mock-pitch-speed", "--mock-swing-speed"),
+            ("--mock-pitch-speed", "--swing-speed"),
+            ("--pitch-speed", "--mock"),
+            ("--mock-pitch-speed", "--mock-enrichment-ms", "50"),
+            ("--pitch-speed-threshold", "35"),
+            ("--mock", "--pitch-speed-max", "70"),
+            ("--mock-pitch-speed", "--pitch-speed-threshold", "0"),
+            ("--mock-pitch-speed", "--pitch-speed-threshold", "-5"),
+            ("--mock-pitch-speed", "--pitch-speed-max", "25"),
+            ("--mock-pitch-speed", "--pitch-speed-max", "-1"),
+            ("--mock-pitch-speed", "--pitch-speed-threshold", "50", "--pitch-speed-max", "45"),
+        ],
+    )
+    def test_cli_rejects_invalid_pitch_speed_arguments(self, run_cli, arguments):
+        """Conflicting modes and impossible limits fail at startup, not silently."""
+        with pytest.raises(SystemExit) as excinfo:
+            run_cli(*arguments)
+
+        assert excinfo.value.code == 2
 
 
 class TestProfileStamping:

@@ -19,6 +19,7 @@ import pytest
 from openflight.ops243 import OPS243Radar
 
 DEPRECATED_MODE_COMMANDS = (b"G1", b"G0")
+CW_SPEED_SETUPS = ("configure_for_swing_speed_training", "configure_for_pitch_speed")
 
 
 class RecordingSerial:
@@ -103,9 +104,10 @@ def test_switch_to_rolling_buffer_uses_gc(radar):
 # --- swing-speed training is a separate, CW-only path -----------------------
 
 
-def test_swing_speed_training_selects_cw_mode(radar):
-    """Training reports raw CW speeds, so it must select GS."""
-    radar.configure_for_swing_speed_training()
+@pytest.mark.parametrize("setup", CW_SPEED_SETUPS)
+def test_swing_speed_training_selects_cw_mode(radar, setup):
+    """Speed streaming reports raw CW speeds, so it must select GS."""
+    getattr(radar, setup)()
 
     sent = _sent(radar)
     assert b"GS" in sent, f"training must select CW mode (GS), sent: {radar.serial.writes!r}"
@@ -113,9 +115,10 @@ def test_swing_speed_training_selects_cw_mode(radar):
         assert deprecated not in sent
 
 
-def test_swing_speed_training_never_enters_rolling_buffer(radar):
-    """Training must not arm the rolling buffer: no GC, no S#n, no S! trigger."""
-    radar.configure_for_swing_speed_training()
+@pytest.mark.parametrize("setup", CW_SPEED_SETUPS)
+def test_swing_speed_training_never_enters_rolling_buffer(radar, setup):
+    """Speed streaming must not arm the rolling buffer: no GC, no S#n, no S! trigger."""
+    getattr(radar, setup)()
 
     for command in (b"GC", b"S#", b"S!"):
         assert command not in _sent(radar), (
@@ -124,14 +127,15 @@ def test_swing_speed_training_never_enters_rolling_buffer(radar):
         )
 
 
-def test_swing_speed_training_never_writes_flash(radar):
+@pytest.mark.parametrize("setup", CW_SPEED_SETUPS)
+def test_swing_speed_training_never_writes_flash(radar, setup):
     """A! writes persistent memory; only the one-time setup path may do that.
 
     A stray A! here would overwrite the persisted rolling-buffer boot state
     that the HOST_INT workaround depends on, breaking launch mode until the
     setup script was re-run.
     """
-    radar.configure_for_swing_speed_training()
+    getattr(radar, setup)()
 
     assert b"A!" not in _sent(radar), (
         "training must not persist config to flash — it would clobber the "
@@ -149,13 +153,89 @@ def test_swing_speed_training_activates_and_applies_thresholds(radar):
     assert sent.rstrip().endswith(b"PA") or b"PA" in sent, "training must leave the radar active"
 
 
-def test_swing_speed_training_requires_connection():
+@pytest.mark.parametrize("setup", CW_SPEED_SETUPS)
+def test_swing_speed_training_requires_connection(setup):
     """Configuring a disconnected radar must fail loudly, not silently no-op."""
     instance = OPS243Radar.__new__(OPS243Radar)
     instance.serial = None
 
     with pytest.raises(ConnectionError):
-        instance.configure_for_swing_speed_training()
+        getattr(instance, setup)()
+
+
+def _record_with_sleeps(monkeypatch, radar):
+    """Interleave sleep calls into the recorded writes so delays are pinned too."""
+    monkeypatch.setattr(
+        "openflight.ops243.time.sleep",
+        lambda seconds: radar.serial.writes.append(("sleep", seconds)),
+    )
+
+
+def test_swing_speed_training_exact_command_sequence(monkeypatch, radar):
+    """Pin the full swing setup, including order and delays, captured before refactoring."""
+    _record_with_sleeps(monkeypatch, radar)
+
+    radar.configure_for_swing_speed_training(min_speed_mph=45, num_reports=3)
+
+    assert radar.serial.writes == [
+        b"GS", ("sleep", 0.1),
+        b"PI", ("sleep", 0.1),
+        b"US",
+        b"P0",
+        b"S=30", b"\r", ("sleep", 0.1),
+        b"S(", ("sleep", 0.1),
+        b"X=2", b"\r", ("sleep", 0.1),
+        b"R-", ("sleep", 0.05),
+        b"R>45", b"\r", ("sleep", 0.05),
+        b"O3", ("sleep", 0.05),
+        b"OJ",
+        b"OM",
+        b"W0", ("sleep", 0.05),
+        b"PA", ("sleep", 0.1),
+    ]  # fmt: skip
+
+
+def test_pitch_speed_exact_command_sequence(monkeypatch, radar):
+    """Pitch setup matches swing except a 512-point FFT (X=4) and inbound-only R+."""
+    _record_with_sleeps(monkeypatch, radar)
+
+    radar.configure_for_pitch_speed(min_speed_mph=30, num_reports=8)
+
+    assert radar.serial.writes == [
+        b"GS", ("sleep", 0.1),
+        b"PI", ("sleep", 0.1),
+        b"US",
+        b"P0",
+        b"S=30", b"\r", ("sleep", 0.1),
+        b"S(", ("sleep", 0.1),
+        b"X=4", b"\r", ("sleep", 0.1),
+        b"R+", ("sleep", 0.05),
+        b"R>30", b"\r", ("sleep", 0.05),
+        b"O8", ("sleep", 0.05),
+        b"OJ",
+        b"OM",
+        b"W0", ("sleep", 0.05),
+        b"PA", ("sleep", 0.1),
+    ]  # fmt: skip
+
+
+def test_pitch_speed_is_inbound_only(radar):
+    """Pitches approach the radar behind home plate; outbound must be filtered out."""
+    radar.configure_for_pitch_speed()
+
+    sent = _sent(radar)
+    assert b"R+" in sent
+    assert b"R-" not in sent
+    assert b"R|" not in sent
+
+
+def test_pitch_speed_defaults_match_fastpitch_monitor(radar):
+    """Without arguments, pitch setup uses the fastpitch 30 mph floor and 8 reports."""
+    radar.configure_for_pitch_speed()
+
+    sent = _sent(radar)
+    assert b"R>30" in sent
+    assert b"O8" in sent
 
 
 # --- the restore path returns to rolling buffer without touching flash ------
