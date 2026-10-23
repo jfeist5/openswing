@@ -35,7 +35,7 @@ export interface SwingSpeedEvent {
   profile_id?: string;
   profile_name?: string;
   unit: string;
-  mode: 'swing-speed';
+  mode: 'swing-speed' | 'pitch-speed';
 }
 
 export interface RadarConfig {

@@ -157,6 +157,8 @@ export const es: Messages = {
   'app.selectClub': 'Elegir palo',
   'app.simulateSwing': 'Simular swing',
   'app.simulateShot': 'Simular golpe',
+  'app.simulatePitch': 'Simular lanzamiento',
+  'app.pitchSpeed': 'Velocidad de lanzamiento',
   'picker.groups': 'Grupos',
   'picker.close': 'Cerrar {title}',
 

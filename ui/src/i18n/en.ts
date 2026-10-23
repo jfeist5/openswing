@@ -155,6 +155,8 @@ export const en = {
   'app.selectClub': 'Select club',
   'app.simulateSwing': 'Simulate swing',
   'app.simulateShot': 'Simulate shot',
+  'app.simulatePitch': 'Simulate pitch',
+  'app.pitchSpeed': 'Pitch Speed',
   'picker.groups': 'Groups',
   'picker.close': 'Close {title}',
 

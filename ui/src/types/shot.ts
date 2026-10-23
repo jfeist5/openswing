@@ -10,7 +10,7 @@ export interface CameraReplay {
 }
 
 export interface Shot {
-  mode?: 'rolling-buffer' | 'mock' | 'swing-speed';
+  mode?: 'rolling-buffer' | 'mock' | 'swing-speed' | 'pitch-speed';
   shot_number?: number | null;
   ball_speed_mph: number;
   club_speed_mph: number | null;
@@ -127,7 +127,7 @@ export interface TriggerDiagnosticUpdate {
 }
 
 export interface TriggerStatus {
-  mode: 'rolling-buffer' | 'mock' | 'swing-speed';
+  mode: 'rolling-buffer' | 'mock' | 'swing-speed' | 'pitch-speed';
   trigger_type: string | null;
   radar_connected: boolean;
   radar_port: string | null;

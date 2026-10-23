@@ -157,6 +157,8 @@ export const fr: Messages = {
   'app.selectClub': 'Choisir un club',
   'app.simulateSwing': 'Simuler un swing',
   'app.simulateShot': 'Simuler un coup',
+  'app.simulatePitch': 'Simuler un lancer',
+  'app.pitchSpeed': 'Vitesse de lancer',
   'picker.groups': 'Groupes',
   'picker.close': 'Fermer {title}',
 

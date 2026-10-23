@@ -157,6 +157,8 @@ export const pt: Messages = {
   'app.selectClub': 'Selecionar taco',
   'app.simulateSwing': 'Simular swing',
   'app.simulateShot': 'Simular tacada',
+  'app.simulatePitch': 'Simular arremesso',
+  'app.pitchSpeed': 'Velocidade do arremesso',
   'picker.groups': 'Grupos',
   'picker.close': 'Fechar {title}',
 

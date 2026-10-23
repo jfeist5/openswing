@@ -37,6 +37,7 @@ import { filterShotsByProfile } from './types/shot';
 import type { Profile } from './types/profile';
 import { getClubName } from './data/clubs';
 import { getTrainingImplementLabel } from './data/trainingImplements';
+import { getModeFeatures } from './data/modeFeatures';
 import { unlockAudioCue } from './utils/audioCue';
 import { useLaunchDaddy, LaunchDaddyOverlay, LaunchDaddyBrand } from './components/LaunchDaddy';
 
@@ -128,10 +129,16 @@ function AppContent() {
 
   const { isLaunchDaddyMode, isExploding, triggerExplosion } = useLaunchDaddy();
   const isDisplayRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/display';
-  const isSwingSpeedMode = triggerStatus.mode === 'swing-speed';
-  const activeImplementLabel = isSwingSpeedMode
-    ? getTrainingImplementLabel(selectedTrainingImplement)
-    : getClubName(selectedClub);
+  const modeFeatures = getModeFeatures(triggerStatus.mode);
+  const { picker } = modeFeatures;
+  let activeImplementLabel: string;
+  if (picker.kind === 'implement') {
+    activeImplementLabel = getTrainingImplementLabel(selectedTrainingImplement);
+  } else if (picker.kind === 'club') {
+    activeImplementLabel = getClubName(selectedClub);
+  } else {
+    activeImplementLabel = t(picker.labelKey);
+  }
 
   useEffect(() => {
     return socketService.onSessionCleared(() => {
@@ -197,7 +204,7 @@ function AppContent() {
   };
 
   const handlePickerSelect = (id: string) => {
-    if (isSwingSpeedMode) {
+    if (picker.kind === 'implement') {
       setSelectedTrainingImplement(id);
       socketService.setTrainingImplement(id);
     } else {
@@ -233,11 +240,10 @@ function AppContent() {
     );
   }
 
-  const changeClubAction = (
-    <PanelAction onClick={() => setPickerOpen(true)}>
-      {isSwingSpeedMode ? t('app.changeImplement') : t('app.changeClub')}
-    </PanelAction>
-  );
+  const changeClubAction =
+    picker.kind === 'none' ? null : (
+      <PanelAction onClick={() => setPickerOpen(true)}>{t(picker.changeKey)}</PanelAction>
+    );
   const latestReplay = profileLatestShot?.camera_replay;
 
   const liveHeaderActions = (
@@ -306,7 +312,7 @@ function AppContent() {
                 profileId={activeProfileId}
                 profileName={activeProfileName}
                 clubLabel={activeImplementLabel}
-                activeTrainingImplement={isSwingSpeedMode ? selectedTrainingImplement : undefined}
+                activeTrainingImplement={picker.kind === 'implement' ? selectedTrainingImplement : undefined}
                 selectedMetricId={heroMetricId}
                 onSelectMetric={setHeroMetricId}
                 isNewShot={profileIsNewShot}
@@ -379,10 +385,7 @@ function AppContent() {
           </div>
         )}
         {mockMode && currentView === 'live' ? (
-          <SimulateBubble
-            label={isSwingSpeedMode ? t('app.simulateSwing') : t('app.simulateShot')}
-            onSimulate={() => socketService.simulateShot()}
-          />
+          <SimulateBubble label={t(modeFeatures.simulateLabelKey)} onSimulate={() => socketService.simulateShot()} />
         ) : null}
       </main>
 
@@ -419,14 +422,14 @@ function AppContent() {
         />
       ) : null}
 
-      {pickerOpen ? (
+      {pickerOpen && picker.kind !== 'none' ? (
         <PickerOverlay
-          title={isSwingSpeedMode ? t('app.selectImplement') : t('app.selectClub')}
-          selectedId={isSwingSpeedMode ? selectedTrainingImplement : selectedClub}
-          sections={isSwingSpeedMode ? trainingImplementSections() : clubSections()}
+          title={t(picker.titleKey)}
+          selectedId={picker.kind === 'implement' ? selectedTrainingImplement : selectedClub}
+          sections={picker.kind === 'implement' ? trainingImplementSections() : clubSections()}
           onSelect={handlePickerSelect}
           onClose={() => setPickerOpen(false)}
-          wide={isSwingSpeedMode}
+          wide={picker.wide}
         />
       ) : null}
 
