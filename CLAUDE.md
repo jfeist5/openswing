@@ -27,19 +27,29 @@ The Python package is `openflight` (`src/openflight/`), even though the checkout
 
 | Mode | Metrics | Status |
 |---|---|---|
-| Pitching | Pitch speed (first priority), spin rate | Pitch speed in progress. Spin later. |
+| Pitching | Velocity, session stats, pitch type, spin rate (see the pitch metric plan below) | Velocity done. Pitch screens in progress (step 4). |
 | Hitting | Exit velocity, launch angle, carry | Later. Includes a view showing ball flight on a softball field. |
 
+- **Pitch-speed mode is for bullpens and pitching practice only, with no batter.** Hitting will be a separate mode later.
+- **Pitch metric plan, in this order:**
+  1. Velocity (done).
+  2. Session stats: pitch count, average, max, and velocity trend over the session (for fatigue).
+  3. Pitch-type tagging, using the pitch-type picker below, with stats split by pitch type.
+  4. Spin rate (experimental): needs the retuned fastpitch RPM range and a capture trigger during flight, not the glove pop (see "Pitch spin" below).
+  - Future, maybe: pitch location at the plate and approach angle, using the IWR6843.
 - **Pitch-speed mode:** hide the club picker and golf sim forwarding. Swing-speed mode is the precedent:
   - `swing_speed.py` streams OPS CW speed reports and takes the peak of each event, like a radar gun. It never uses the rolling buffer.
   - `on_swing_speed_detected` in `server.py` never calls the sim connectors.
-  - The UI swaps the club picker via `isSwingSpeedMode` in `ui/src/App.tsx`.
+  - The UI decides what each mode shows through `getModeFeatures` in `ui/src/data/modeFeatures.ts`.
 - **Pitch-speed design decisions (agreed):**
   1. Generalize the swing-speed monitor with direction and mode settings. `PitchSpeedMonitor` is a thin subclass, so the server's existing `isinstance(SwingSpeedMonitor)` checks keep working. Tests must pin swing-speed behavior unchanged.
   2. Add a separate `configure_for_pitch_speed` in `ops243.py`: inbound only (`R+`) and a finer FFT than swing-speed's 256-point (~1.6 mph per bin). Steps shared with the swing-speed setup move into one private helper. Each mode keeps its own setup so tuning one can't change another.
   3. In the UI, a single mode-to-features helper decides what each mode shows (club picker, simulate-button label, etc.). It replaces the scattered `isSwingSpeedMode` checks.
-  4. Render pitch shots as pitches, not golf shots: Live tiles, Stats, Shots list, TV display, and CSV export (the `isSwingSpeedShot` checks). Add Playwright pitch-mode tests at all three kiosk sizes (800×400, 800×480, 1024×600). This needs a pitch-speed mode in the UI mock server (`ui/mock-server/`).
+  4. Render pitch shots as pitches, not golf shots: Live tiles, Stats, Shots list, TV display, and CSV export (the `isSwingSpeedShot` checks). Add Playwright pitch-mode tests at all three kiosk sizes (800×400, 800×480, 1024×600). Playwright runs against the real Python server in mock mode (`ui/playwright.config.ts`), not `ui/mock-server/`, so pitch tests need a backend started with `--mock-pitch-speed`. Also fix the golf screen that flashes on page load before the server reports its mode. Leave room on the pitch screens for velocity trend, pitch type, and spin rate, but don't build them yet.
 - **Future: pitch-type picker.** Pick fastball, rise, drop, curve, screw, or change-up before a pitch, and tag each pitch with it so stats can be broken down by pitch type. Needs a server-side pitch-type list (like `TRAINING_IMPLEMENT_LABELS`) and a picker in pitch mode, which has none after step 3.
+- **Future: mode-select menu on startup.** Choose Pitching, Swing training, Hitting, or Golf from the UI so coaches don't need command-line flags. Ideally switch modes without restarting, reconfiguring the radar for the selected mode. Notes for when it's built:
+  - `start_monitor` in `server.py` already stops the current monitor before starting another, and the speed-streaming monitors call `restore_rolling_buffer_mode()` on disconnect.
+  - Switching back to Golf at runtime is a mode transition on the OPS243-A, which can flip HOST_INT pin mode (see "Radar Setup"). The sound trigger must be verified on hardware after a switch, or the switch may need a radar power cycle.
 - **Pitch spin:** needs two changes.
   - A retuned RPM range. The processor searches only 2,000–12,000 RPM (`SPIN_MIN/MAX_SEAM_HZ`) and uses golf spin priors.
   - A different capture trigger. The 4096-sample rolling buffer holds about 136 ms at 30 ksps, a pitch flies for about 0.5 s, and a glove-pop sound trigger fires only at the end of the flight.
