@@ -25,6 +25,16 @@ def install_suffix() -> str:
     return project_name
 
 
+def display_name(project_name: str) -> str:
+    """Return the desktop label: OpenSwing, suffixed only for secondary checkouts."""
+    if project_name in ("openswing", "openflight"):
+        return "OpenSwing"
+    for base in ("openswing-", "openflight-"):
+        if project_name.startswith(base):
+            return f"OpenSwing ({project_name.removeprefix(base)})"
+    return f"OpenSwing ({project_name})"
+
+
 def installed_paths(home: Path) -> tuple[Path, Path]:
     """Return the default launcher and desktop paths for this checkout."""
     suffix = install_suffix()
@@ -75,13 +85,12 @@ def test_installer_creates_terminal_free_desktop_entry_and_preserves_launcher(tm
     assert "StartupNotify=false" in desktop_entry
     assert "lxterminal" not in desktop_entry
     assert "/home/coleman" not in desktop_entry
-    assert f"Icon={REPO_ROOT}/ui/public/openflight-icon-black.png" in desktop_entry
+    assert f"Icon={REPO_ROOT}/ui/public/openswing-icon.svg" in desktop_entry
     assert os.access(desktop_path, os.X_OK)
     assert f"openflight_installed_dir={REPO_ROOT}" in launcher_path.read_text(encoding="utf-8")
 
-    suffix = install_suffix()
-    expected_name = "OpenFlight" if not suffix else f"OpenFlight ({suffix})"
-    assert f"Name={expected_name}" in desktop_entry
+    assert f"Name={display_name(REPO_ROOT.name)}" in desktop_entry
+    assert "Comment=Softball and golf launch monitor" in desktop_entry
 
     launcher_path.write_text("#!/bin/bash\n# local calibration\n", encoding="utf-8")
     repeated_install = subprocess.run(
@@ -96,6 +105,42 @@ def test_installer_creates_terminal_free_desktop_entry_and_preserves_launcher(tm
     assert launcher_path.read_text(encoding="utf-8") == ("#!/bin/bash\n# local calibration\n")
     assert "Replace it? [y/N]" in repeated_install.stderr
     assert "Existing desktop entry preserved" in repeated_install.stdout
+
+
+@pytest.mark.parametrize(
+    ("checkout", "expected_name", "desktop_file"),
+    [
+        ("openswing", "OpenSwing", "OpenFlight-openswing.desktop"),
+        ("openswing-dev", "OpenSwing (dev)", "OpenFlight-openswing-dev.desktop"),
+        ("openflight", "OpenSwing", "OpenFlight.desktop"),
+        ("openflight-dev", "OpenSwing (dev)", "OpenFlight-dev.desktop"),
+        ("softball", "OpenSwing (softball)", "OpenFlight-softball.desktop"),
+    ],
+)
+def test_desktop_label_is_openswing_while_file_names_stay_stable(
+    tmp_path, checkout, expected_name, desktop_file
+):
+    """Reinstalling must update the existing launcher in place, so only the label changes."""
+    setup_dir = tmp_path / checkout / "scripts/setup"
+    setup_dir.mkdir(parents=True)
+    shutil.copy(INSTALLER, setup_dir)
+    shutil.copy(EXAMPLE_LAUNCHER, setup_dir)
+    home = tmp_path / "home"
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "OPENFLIGHT_DESKTOP_DIR": str(home / "Desktop"),
+        "OPENFLIGHT_SKIP_DESKTOP_TRUST": "true",
+    }
+
+    subprocess.run(
+        ["bash", str(setup_dir / INSTALLER.name)], check=True, cwd=tmp_path / checkout, env=env
+    )
+
+    entry = (home / "Desktop" / desktop_file).read_text(encoding="utf-8")
+    assert f"Name={expected_name}\n" in entry
+    assert "Comment=Softball and golf launch monitor\n" in entry
+    assert "OpenFlight" not in entry.split("Exec=")[0]
 
 
 def test_desktop_entry_loads_interactive_shell_path(tmp_path):

@@ -22,53 +22,63 @@
 }
 
 /*
- * Palette values come from the "Club Select Mockups" design doc: option 6a for
- * the dark theme, option 5a (its daylight sibling) for the light theme.
+ * OpenSwing palette: gold #CFC18C, black #0B0B0B (the logo's black), and white.
  *
  * --color-accent is for text and icons; --color-accent-block is for solid
- * fills, always paired with --color-accent-fg. Dark mode uses #ffd400 for
- * both. Light mode uses a darker, more saturated gold for both: pale
- * #ffd400 washes out on cream, as text and as a chip fill.
+ * fills, always paired with --color-accent-fg. Dark mode uses gold for both.
+ * Gold text on white is about 1.8:1, so light mode keeps gold to fills with
+ * black text and uses black for accent text and the selected border.
  *
- * Kiosk contrast: muted/faint stay readable on black. Never park shot
- * numbers on --color-text-muted. Grid gaps stay grey (--color-border).
+ * Kiosk contrast (bright gym, 7-inch screen) is enforced by
+ * src/theme/themeTokens.test.ts. Never park shot numbers on
+ * --color-text-muted. Grid gaps stay grey (--color-border).
  */
 [data-theme='dark'] {
   color-scheme: dark;
-  --color-bg: #0e0f10;
-  --color-surface: #16181a;
-  --color-accent: #ffd400;
-  --color-accent-block: #ffd400;
-  --color-accent-fg: #0b0b0c;
+  --color-bg: #0b0b0b;
+  --color-surface: #161616;
+  --color-accent: #cfc18c;
+  --color-accent-block: #cfc18c;
+  --color-accent-fg: #0b0b0b;
   --color-text: #ffffff;
-  --color-text-muted: rgba(242, 241, 236, 0.78);
-  --color-text-faint: rgba(242, 241, 236, 0.58);
-  --color-border: rgba(242, 241, 236, 0.32);
-  --color-border-soft: rgba(242, 241, 236, 0.2);
+  --color-text-muted: rgba(255, 255, 255, 0.78);
+  --color-text-faint: rgba(255, 255, 255, 0.58);
+  --color-border: rgba(255, 255, 255, 0.32);
+  --color-border-soft: rgba(255, 255, 255, 0.2);
   --color-border-emphasis: var(--color-accent);
-  --color-scrim: rgba(6, 7, 8, 0.6);
-  --color-hatch: #101112;
+  --color-scrim: rgba(0, 0, 0, 0.6);
+  --color-hatch: #121212;
   --color-danger: #ff9b7d;
   --color-danger-border: rgba(255, 120, 90, 0.5);
 }
 
 [data-theme='light'] {
   color-scheme: light;
-  --color-bg: #f4f2ec;
-  --color-surface: #f4f2ec;
-  --color-accent: #ffbe1b;
-  --color-accent-block: #ffbe1b;
-  --color-accent-fg: #14140f;
-  --color-text: #14140f;
-  --color-text-muted: rgba(20, 20, 15, 0.72);
-  --color-text-faint: rgba(20, 20, 15, 0.52);
-  --color-border: rgba(20, 20, 15, 0.28);
-  --color-border-soft: rgba(20, 20, 15, 0.16);
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-accent: #0b0b0b;
+  --color-accent-block: #cfc18c;
+  --color-accent-fg: #0b0b0b;
+  --color-text: #0b0b0b;
+  --color-text-muted: rgba(11, 11, 11, 0.72);
+  --color-text-faint: rgba(11, 11, 11, 0.6);
+  --color-border: rgba(11, 11, 11, 0.28);
+  --color-border-soft: rgba(11, 11, 11, 0.16);
   --color-border-emphasis: var(--color-accent);
-  --color-scrim: rgba(20, 20, 15, 0.45);
-  --color-hatch: #eae7df;
+  --color-scrim: rgba(11, 11, 11, 0.45);
+  --color-hatch: #f0f0f0;
   --color-danger: #b03a1a;
   --color-danger-border: rgba(176, 58, 26, 0.5);
+}
+
+/*
+ * Native <select> popups draw each option with its own colors. A transparent
+ * option falls back to the browser's white popup, so inherited white text
+ * vanishes in the dark theme. Paint every option from the theme.
+ */
+select option {
+  background-color: var(--color-surface);
+  color: var(--color-text);
 }
 
 html {

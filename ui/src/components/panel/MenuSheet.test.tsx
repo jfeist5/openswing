@@ -16,6 +16,13 @@ describe('MenuSheet profiles', () => {
     expect(html).not.toContain('Add profile');
     expect(html).not.toContain('menu-sheet__input');
   });
+
+  it('credits OpenFlight at the bottom of the menu', () => {
+    const html = renderToString(<MenuSheet onClose={() => {}} onShutdown={() => {}} />);
+
+    expect(html).toContain('menu-sheet__credit');
+    expect(html).toContain('OpenSwing · based on OpenFlight');
+  });
 });
 
 describe('MenuSheet language', () => {

@@ -1341,8 +1341,8 @@ def _iwr6843_startup_recovery(error: object) -> str:
     """Translate a known TI initialization failure into operator guidance."""
     normalized_error = str(error or "").casefold()
     if "press reset and retry" in normalized_error or "firmware may be wedged" in normalized_error:
-        return "Press RESET on the TI radar, then relaunch OpenFlight."
-    return "Check the TI radar USB and power connections, then relaunch OpenFlight."
+        return "Press RESET on the TI radar, then relaunch OpenSwing."
+    return "Check the TI radar USB and power connections, then relaunch OpenSwing."
 
 
 def init_inclinometer(*, zero_offset_deg: float, bus_number: int = 1, address: int = 0x18) -> bool:
@@ -5430,7 +5430,7 @@ def main():
             simulators=args.sim,
         ),
     )
-    startup_status.start("server", "Preparing OpenFlight server")
+    startup_status.start("server", "Preparing OpenSwing server")
 
     # Configure logging - always show INFO and above for openflight modules
     # This ensures trigger events and important messages are visible
@@ -5621,7 +5621,7 @@ def main():
             startup_status.error(
                 "kld7_vertical",
                 "K-LD7 launch radar failed to connect",
-                "Check the K-LD7 USB connection and power, then relaunch OpenFlight.",
+                "Check the K-LD7 USB connection and power, then relaunch OpenSwing.",
             )
             print("ERROR: K-LD7 vertical requested but failed to connect. Exiting.")
             _cleanup_hardware_for_shutdown()
@@ -5646,7 +5646,7 @@ def main():
             startup_status.error(
                 "kld7_horizontal",
                 "K-LD7 path radar failed to connect",
-                "Check the K-LD7 USB connection and power, then relaunch OpenFlight.",
+                "Check the K-LD7 USB connection and power, then relaunch OpenSwing.",
             )
             print("ERROR: K-LD7 horizontal requested but failed to connect. Exiting.")
             _cleanup_hardware_for_shutdown()
@@ -5672,9 +5672,9 @@ def main():
         )
     except Exception:
         monitor_recovery = (
-            "Relaunch OpenFlight and check the terminal log."
+            "Relaunch OpenSwing and check the terminal log."
             if args.mock
-            else "Check the OPS radar USB and power connections, then relaunch OpenFlight."
+            else "Check the OPS radar USB and power connections, then relaunch OpenSwing."
         )
         startup_status.error(
             monitor_component,
@@ -5731,7 +5731,7 @@ def main():
 
     print(f"Server starting at http://{args.host}:{args.web_port}")
     print()
-    startup_status.start("server", "Starting OpenFlight server")
+    startup_status.start("server", "Starting OpenSwing server")
 
     try:
         # Note: Flask debug mode (reloader) is disabled to prevent duplicate processes

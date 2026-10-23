@@ -1,7 +1,15 @@
 <p align="center">
-<img src="./ui/public/openflightlogo.svg">
-  DIY Golf Launch Monitor using the OPS243-A Doppler Radar.
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./ui/public/openswing-logo-on-dark-transparent.svg">
+    <img src="./ui/public/openswing-logo-light.svg" alt="OpenSwing" width="420">
+  </picture>
+  <br>
+  Softball pitch speed and swing training with the OPS243-A Doppler radar. Golf still works.
 </p>
+
+> **Credit:** OpenSwing is based on [OpenFlight](https://github.com/open-flight/openflight),
+> the open-source DIY golf launch monitor, and keeps its AGPL-3.0 license (see [LICENSE](LICENSE)).
+> The documentation below is OpenFlight's and still describes golf.
 
 <p align="center">
   <a href="https://discord.gg/w8hhG4WVMN">

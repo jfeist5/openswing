@@ -32,7 +32,7 @@ def configured_startup_components(
     simulators: bool,
 ) -> list[StartupComponent]:
     """Return only the components enabled for this OpenFlight process."""
-    components = [StartupComponent("server", "OpenFlight server")]
+    components = [StartupComponent("server", "OpenSwing server")]
     components.append(
         StartupComponent("monitor", "Shot simulator")
         if mock
@@ -81,7 +81,7 @@ def initialize_startup_status(
             simulators=simulators,
         ),
     )
-    reporter.start("server", "Preparing OpenFlight server")
+    reporter.start("server", "Preparing OpenSwing server")
 
 
 def _atomic_write_payload(path: Path, payload: dict) -> None:
@@ -119,7 +119,7 @@ def complete_startup_status(path: Path | str) -> None:
         raise ValueError("Startup status document has no server component")
     server["state"] = "ready"
     payload["overall"] = "ready"
-    payload["message"] = "OpenFlight is ready"
+    payload["message"] = "OpenSwing is ready"
     _atomic_write_payload(status_path, payload)
 
 
@@ -170,7 +170,7 @@ class StartupStatusReporter:
             for component in components
         }
         self._overall = "starting"
-        self._message = "Preparing OpenFlight"
+        self._message = "Preparing OpenSwing"
         self._error = None
         self._write()
 
@@ -190,7 +190,7 @@ class StartupStatusReporter:
         self,
         component_id: str,
         message: str,
-        recovery: str = "Check the connected hardware, then relaunch OpenFlight.",
+        recovery: str = "Check the connected hardware, then relaunch OpenSwing.",
         log_path: str = DEFAULT_STARTUP_LOG_PATH,
     ) -> None:
         """Record an initialization failure for a configured component."""
@@ -198,7 +198,7 @@ class StartupStatusReporter:
         self._error = {"recovery": recovery, "log_path": log_path}
         self._set_component(component_id, "error", message)
 
-    def finish(self, message: str = "OpenFlight is ready") -> None:
+    def finish(self, message: str = "OpenSwing is ready") -> None:
         """Mark the full startup sequence ready for browser handoff."""
         self._overall = "ready"
         self._message = message

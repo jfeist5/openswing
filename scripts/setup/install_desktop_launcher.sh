@@ -24,11 +24,25 @@ fi
 if [[ -n "$install_suffix" ]]; then
     launcher_name="run-openflight-$install_suffix.sh"
     desktop_name="OpenFlight-$install_suffix.desktop"
-    application_name="OpenFlight ($install_suffix)"
 else
     launcher_name="run-openflight.sh"
     desktop_name="OpenFlight.desktop"
-    application_name="OpenFlight"
+fi
+
+# File names above keep the OpenFlight scheme so reinstalling replaces an
+# existing launcher (and keeps its calibrated run script); only the label changes.
+if [[ "$project_name" == openswing ]]; then
+    display_suffix=""
+elif [[ "$project_name" == openswing-* ]]; then
+    display_suffix="${project_name#openswing-}"
+else
+    display_suffix="$install_suffix"
+fi
+
+if [[ -n "$display_suffix" ]]; then
+    application_name="OpenSwing ($display_suffix)"
+else
+    application_name="OpenSwing"
 fi
 
 launcher_path="${OPENFLIGHT_LAUNCHER_PATH:-$HOME/$launcher_name}"
@@ -62,10 +76,10 @@ trap cleanup EXIT
     printf '%s\n' 'Version=1.0'
     printf '%s\n' 'Type=Application'
     printf 'Name=%s\n' "$application_name"
-    printf '%s\n' 'Comment=OpenFlight golf launch monitor'
+    printf '%s\n' 'Comment=Softball and golf launch monitor'
     printf 'Exec=/bin/bash -ilc %s\n' "$launcher_path"
     printf 'Path=%s\n' "$project_dir"
-    printf 'Icon=%s\n' "$project_dir/ui/public/openflight-icon-black.png"
+    printf 'Icon=%s\n' "$project_dir/ui/public/openswing-icon.svg"
     printf '%s\n' 'Terminal=false'
     printf '%s\n' 'StartupNotify=false'
     printf '%s\n' 'Categories=Game;Sports;'

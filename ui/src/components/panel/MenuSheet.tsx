@@ -86,6 +86,7 @@ export function MenuSheet({ onClose, onShutdown }: MenuSheetProps) {
         <button type="button" className="menu-sheet__shutdown" onClick={onShutdown}>
           {t('menu.shutdown')}
         </button>
+        <p className="menu-sheet__credit">{t('menu.credit')}</p>
       </div>
     </>
   );

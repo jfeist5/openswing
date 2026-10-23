@@ -275,7 +275,7 @@
 }
 
 .panel-footer__menu {
-  width: 44px;
+  min-width: 44px;
   height: 44px;
   display: flex;
   align-items: center;
@@ -286,7 +286,14 @@
   color: var(--color-accent);
   cursor: pointer;
   flex-shrink: 0;
-  padding: 0;
+  padding: 0 6px;
+}
+
+/* OpenSwing wordmark (about 4:1); the height matches the old square mark. */
+.panel-footer__menu .brand-logo {
+  height: 26px;
+  width: auto;
+  display: block;
 }
 
 .panel-footer__menu svg {
@@ -545,14 +552,14 @@
 @keyframes shot-impact {
   0% {
     opacity: 1;
-    background: radial-gradient(circle at center, var(--color-accent) 0%, transparent 0%);
+    background: radial-gradient(circle at center, var(--color-accent-block) 0%, transparent 0%);
   }
   40% {
     opacity: 0.9;
     background: radial-gradient(
       circle at center,
-      var(--color-accent) 0%,
-      color-mix(in srgb, var(--color-accent) 45%, transparent) 42%,
+      var(--color-accent-block) 0%,
+      color-mix(in srgb, var(--color-accent-block) 45%, transparent) 42%,
       transparent 72%
     );
   }
@@ -1195,6 +1202,14 @@
   font-weight: 600;
   font-size: 0.6875rem;
   color: var(--color-text);
+}
+
+.menu-sheet__credit {
+  margin: 0;
+  color: var(--color-text-faint);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-align: center;
 }
 
 .menu-sheet__shutdown {

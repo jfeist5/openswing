@@ -180,7 +180,7 @@ stop_startup_splash_server() {
 
     if [ -n "$STARTUP_RUNTIME_DIR" ] && [ -d "$STARTUP_RUNTIME_DIR" ]; then
         rm -f "$STARTUP_RUNTIME_DIR/startup-splash.html"
-        rm -f "$STARTUP_RUNTIME_DIR/openflightlogo.svg"
+        rm -f "$STARTUP_RUNTIME_DIR/openswing-logo-on-dark-transparent.svg"
         rm -f "$STARTUP_RUNTIME_DIR/status.json"
         rm -f "$STARTUP_RUNTIME_DIR/dismissed"
         rmdir "$STARTUP_RUNTIME_DIR" 2>/dev/null || true
@@ -261,7 +261,7 @@ start_startup_splash() {
 
     mkdir -p "$STARTUP_RUNTIME_DIR"
     cp "$splash_assets/startup-splash.html" "$STARTUP_RUNTIME_DIR/startup-splash.html"
-    cp "$splash_assets/openflightlogo.svg" "$STARTUP_RUNTIME_DIR/openflightlogo.svg"
+    cp "$splash_assets/openswing-logo-on-dark-transparent.svg" "$STARTUP_RUNTIME_DIR/openswing-logo-on-dark-transparent.svg"
     if has_server_arg --mock || has_server_arg --mock-swing-speed; then
         status_options+=(--mock)
     fi
@@ -367,7 +367,7 @@ ensure_uv_on_path
 if ! command -v uv >/dev/null 2>&1; then
     show_startup_failure \
         "server" \
-        "OpenFlight preparation failed" \
+        "OpenSwing preparation failed" \
         "The uv command is unavailable (checked PATH, ~/.local/bin and ~/.cargo/bin). Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"
 fi
 
@@ -377,8 +377,8 @@ if has_camera_arg; then
     if [ ! -x .venv/bin/python ] || ! .venv/bin/python -c 'import picamera2' >/dev/null 2>&1; then
         uv venv --clear --system-site-packages --python /usr/bin/python3 || show_startup_failure \
             "server" \
-            "OpenFlight preparation failed" \
-            "Camera environment preparation failed. Check the terminal log, then relaunch OpenFlight."
+            "OpenSwing preparation failed" \
+            "Camera environment preparation failed. Check the terminal log, then relaunch OpenSwing."
     fi
     UV_SYNC_ARGS+=(--extra camera)
 fi
@@ -387,8 +387,8 @@ if has_server_arg --ble; then
 fi
 uv sync "${UV_SYNC_ARGS[@]}" || show_startup_failure \
     "server" \
-    "OpenFlight preparation failed" \
-    "Dependency preparation failed. Check the terminal log, then relaunch OpenFlight."
+    "OpenSwing preparation failed" \
+    "Dependency preparation failed. Check the terminal log, then relaunch OpenSwing."
 
 configure_kld7_latency
 
@@ -411,8 +411,8 @@ if ! curl -fsS "http://$HOST:$WEB_PORT" >/dev/null 2>&1; then
     if kill -0 "$SERVER_PID" 2>/dev/null; then
         show_startup_failure \
             "server" \
-            "OpenFlight server timed out" \
-            "Wait a moment, then return to the desktop and relaunch OpenFlight." \
+            "OpenSwing server timed out" \
+            "Wait a moment, then return to the desktop and relaunch OpenSwing." \
             1 \
             true
     fi
@@ -420,8 +420,8 @@ if ! curl -fsS "http://$HOST:$WEB_PORT" >/dev/null 2>&1; then
     SERVER_PID=""
     show_startup_failure \
         "server" \
-        "OpenFlight server exited during startup" \
-        "Check the connected radar hardware and terminal log, then relaunch OpenFlight." \
+        "OpenSwing server exited during startup" \
+        "Check the connected radar hardware and terminal log, then relaunch OpenSwing." \
         1 \
         true
 fi

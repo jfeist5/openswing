@@ -8,7 +8,7 @@ const startingStatus = {
   overall: 'starting',
   message: 'Connecting TI radar',
   components: [
-    { id: 'server', label: 'OpenFlight server', state: 'ready' },
+    { id: 'server', label: 'OpenSwing server', state: 'ready' },
     { id: 'ops', label: 'OPS radar', state: 'ready' },
     { id: 'ti', label: 'TI radar', state: 'starting' },
     { id: 'camera', label: 'Camera', state: 'waiting' },
@@ -23,7 +23,7 @@ const failedStatus = {
     component.id === 'ti' ? { ...component, state: 'error' } : component
   ),
   error: {
-    recovery: 'Press RESET on the TI board, then relaunch OpenFlight.',
+    recovery: 'Press RESET on the TI board, then relaunch OpenSwing.',
     log_path: '/home/pacinoj/openflight_sessions/terminal_logs/latest.log',
   },
 };
@@ -37,6 +37,13 @@ async function fulfillJson(route: Route, payload: object) {
 
 async function gotoSplash(page: Page) {
   await gotoApp(page, `/startup-splash.html?target=${encodeURIComponent(targetPath)}`);
+}
+
+async function expectLogoLoaded(page: Page) {
+  const logo = page.getByRole('img', { name: 'OpenSwing' });
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveAttribute('src', 'openswing-logo-on-dark-transparent.svg');
+  expect(await logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
 }
 
 async function expectMainInsideViewport(page: Page) {
@@ -115,7 +122,7 @@ test('keeps a startup failure visible and stops polling or handoff retries', asy
 
   await gotoSplash(page);
 
-  await expect(page.getByRole('heading', { name: 'OpenFlight couldn’t start' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'OpenSwing couldn’t start' })).toBeVisible();
   await expect(page.getByText(failedStatus.error.recovery)).toBeVisible();
   await expect(page.getByText(failedStatus.error.log_path)).toBeVisible();
   const requestCounts = { statusRequests, targetRequests };
@@ -153,7 +160,8 @@ for (const viewport of KIOSK_VIEWPORTS) {
     await page.route(`**${targetPath}`, (route) => route.abort());
 
     await gotoSplash(page);
-    await expect(page.getByRole('heading', { name: 'Starting OpenFlight' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Starting OpenSwing' })).toBeVisible();
+    await expectLogoLoaded(page);
     await expectMainInsideViewport(page);
 
     status = failedStatus;

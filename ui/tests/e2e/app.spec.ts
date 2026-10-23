@@ -10,6 +10,9 @@ import {
   withControlSocket,
 } from './helpers';
 
+/** OpenSwing gold (#CFC18C), the dark theme's --color-accent. */
+const DARK_ACCENT_RGB = 'rgb(207, 193, 140)';
+
 /** Dismiss the club picker that opens on every load, keeping the default club. */
 async function dismissPicker(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: 'Close Select club' }).click();
@@ -96,12 +99,12 @@ test('keeps shutdown visible and asks for confirmation', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Shut down' }).click();
 
-  await expect(page.getByRole('dialog', { name: 'Shut down OpenFlight?' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Shut down OpenSwing?' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Shut Down', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
 });
 
-test('does not keep the previous metric title yellow after selecting a new hero', async ({ page }) => {
+test('does not keep the previous metric title gold after selecting a new hero', async ({ page }) => {
   await withControlSocket(async (socket) => {
     await simulateShot(socket);
   });
@@ -112,10 +115,10 @@ test('does not keep the previous metric title yellow after selecting a new hero'
   await page.locator('.metric-card--interactive').filter({ hasText: 'Club speed' }).click();
 
   await expect(page.locator('.metric-card--selected')).toContainText('Club speed');
-  await expect(page.locator('.metric-card--selected .metric-card__label')).toHaveCSS('color', 'rgb(255, 212, 0)');
+  await expect(page.locator('.metric-card--selected .metric-card__label')).toHaveCSS('color', DARK_ACCENT_RGB);
   await expect(
     page.locator('.metric-card--interactive').filter({ hasText: 'Ball speed' }).locator('.metric-card__label')
-  ).not.toHaveCSS('color', 'rgb(255, 212, 0)');
+  ).not.toHaveCSS('color', DARK_ACCENT_RGB);
 });
 
 test('pins a tapped metric top-left and remembers it', async ({ page }) => {
@@ -584,7 +587,7 @@ test('display route shows latest shot and recent shots from mock backend session
 
   await gotoApp(page, '/display');
 
-  await expect(page.getByText('OpenFlight Display')).toBeVisible();
+  await expect(page.getByText('OpenSwing Display')).toBeVisible();
   await expect(page.getByText('Socket connected')).toBeVisible();
   await expect(page.getByLabel('Recent shots').locator('.display-shot-chip')).toHaveCount(3);
   await expect(page.getByLabel('Recent shots')).toContainText('pw');
@@ -688,7 +691,7 @@ test('tabbing to a menu segmented control shows a real keyboard focus ring, not 
   // Real keyboard navigation between the two options must show the ring.
   await page.keyboard.press('Tab');
   await expect(metricButton).toBeFocused();
-  await expect(unitsGroup).toHaveCSS('outline-color', 'rgb(255, 212, 0)');
+  await expect(unitsGroup).toHaveCSS('outline-color', DARK_ACCENT_RGB);
   await expect(unitsGroup).toHaveCSS('outline-style', 'solid');
   await expect(unitsGroup).toHaveCSS('outline-width', '2px');
   await expect(unitsGroup).toHaveCSS('outline-offset', '2px');

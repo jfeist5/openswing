@@ -39,7 +39,7 @@ describe('DisplayMode', () => {
       <DisplayMode connected captureSettings={captureSettings} latestShot={shot} shots={[shot]} />
     );
 
-    expect(html).toContain('OpenFlight Display');
+    expect(html).toContain('OpenSwing Display');
     expect(html).toContain('151.2');
     expect(html).toContain('261');
     expect(html).toContain('Socket connected');
@@ -119,6 +119,7 @@ describe('DisplayMode', () => {
     expect(html).toContain('display-shot-chip__club">Pitch<');
     expect(html).toContain('61 mph');
     expect(html).not.toContain(' yds<');
-    expect(html).not.toContain('Swing');
+    expect(html).not.toContain('Swing Speed');
+    expect(html).not.toContain('Last Swing');
   });
 });

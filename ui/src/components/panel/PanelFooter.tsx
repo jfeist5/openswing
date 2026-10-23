@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import Logo from '../../logo/Logo';
+import { BrandLogo } from '../../logo/BrandLogo';
+import { useThemeStore } from '../../stores/useThemeStore';
 import { TabBar } from '../ui/TabBar';
 import type { PanelView } from './views';
 import { PANEL_VIEWS } from './views';
@@ -49,6 +50,7 @@ export function PanelFooter({
   powerStatus: powerStatusProp,
 }: PanelFooterProps) {
   const { t } = useI18n();
+  const theme = useThemeStore((state) => state.theme);
   const { unitSystem } = useUnitPreference();
   const unitsLabel = getUnitsLabel(unitSystem);
   const showUnits = VIEWS_WITH_UNITS.has(currentView);
@@ -85,7 +87,7 @@ export function PanelFooter({
         aria-expanded={menuOpen}
         aria-label={t('nav.openMenu')}
       >
-        {brand ?? <Logo size="small" variant="mono" />}
+        {brand ?? <BrandLogo theme={theme} />}
       </button>
 
       <div className="panel-footer__nav">

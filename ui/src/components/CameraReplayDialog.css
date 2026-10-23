@@ -136,8 +136,8 @@
   left: var(--replay-impact-position);
   width: 2px;
   pointer-events: none;
-  background: var(--color-accent);
-  box-shadow: 0 0 8px rgb(255 212 0 / 70%);
+  background: var(--color-accent-block);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent-block) 70%, transparent);
 }
 
 .camera-replay__control-row {
@@ -191,9 +191,9 @@
 }
 
 .camera-replay__button--primary {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
-  color: #111;
+  border-color: var(--color-accent-block);
+  background: var(--color-accent-block);
+  color: var(--color-accent-fg);
 }
 
 .camera-replay__button--active {

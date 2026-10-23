@@ -52,11 +52,11 @@ def test_reporter_marks_overall_ready_after_components_are_initialized(tmp_path)
 
     reporter.start("ops")
     reporter.ready("ops")
-    reporter.finish("OpenFlight is ready")
+    reporter.finish("OpenSwing is ready")
 
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["overall"] == "ready"
-    assert payload["message"] == "OpenFlight is ready"
+    assert payload["message"] == "OpenSwing is ready"
 
 
 def test_reporter_replaces_status_atomically(tmp_path, monkeypatch):
@@ -91,7 +91,7 @@ def test_configured_components_hide_disabled_hardware():
     )
 
     assert [(item.component_id, item.label) for item in components] == [
-        ("server", "OpenFlight server"),
+        ("server", "OpenSwing server"),
         ("ops", "OPS radar"),
         ("ti", "TI radar"),
         ("inclinometer", "Inclinometer"),
@@ -111,7 +111,7 @@ def test_mock_mode_replaces_ops_with_shot_simulator():
     )
 
     assert [(item.component_id, item.label) for item in components] == [
-        ("server", "OpenFlight server"),
+        ("server", "OpenSwing server"),
         ("monitor", "Shot simulator"),
     ]
 
@@ -132,9 +132,9 @@ def test_initial_status_uses_final_component_order_and_starts_server(tmp_path):
     )
 
     payload = json.loads(status_path.read_text(encoding="utf-8"))
-    assert payload["message"] == "Preparing OpenFlight server"
+    assert payload["message"] == "Preparing OpenSwing server"
     assert payload["components"] == [
-        {"id": "server", "label": "OpenFlight server", "state": "starting"},
+        {"id": "server", "label": "OpenSwing server", "state": "starting"},
         {"id": "ops", "label": "OPS radar", "state": "waiting"},
         {"id": "ti", "label": "TI radar", "state": "waiting"},
     ]
@@ -142,16 +142,16 @@ def test_initial_status_uses_final_component_order_and_starts_server(tmp_path):
 
 def test_shell_readiness_boundary_marks_server_and_overall_ready(tmp_path):
     status_path = tmp_path / "status.json"
-    reporter = StartupStatusReporter(status_path, [StartupComponent("server", "OpenFlight server")])
-    reporter.start("server", "Starting OpenFlight server")
+    reporter = StartupStatusReporter(status_path, [StartupComponent("server", "OpenSwing server")])
+    reporter.start("server", "Starting OpenSwing server")
 
     complete_startup_status(status_path)
 
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["overall"] == "ready"
-    assert payload["message"] == "OpenFlight is ready"
+    assert payload["message"] == "OpenSwing is ready"
     assert payload["components"] == [
-        {"id": "server", "label": "OpenFlight server", "state": "ready"}
+        {"id": "server", "label": "OpenSwing server", "state": "ready"}
     ]
 
 
@@ -170,7 +170,7 @@ def test_failure_identifies_component_recovery_and_log_location(tmp_path):
         status_path,
         component_id="ti",
         message="TI radar failed to initialize",
-        recovery="Check the TI radar USB and power connections, then relaunch OpenFlight.",
+        recovery="Check the TI radar USB and power connections, then relaunch OpenSwing.",
         log_path="/home/pacinoj/openflight_sessions/terminal_logs/",
     )
 
@@ -179,7 +179,7 @@ def test_failure_identifies_component_recovery_and_log_location(tmp_path):
     assert payload["message"] == "TI radar failed to initialize"
     assert payload["components"][0]["state"] == "error"
     assert payload["error"] == {
-        "recovery": "Check the TI radar USB and power connections, then relaunch OpenFlight.",
+        "recovery": "Check the TI radar USB and power connections, then relaunch OpenSwing.",
         "log_path": "/home/pacinoj/openflight_sessions/terminal_logs/",
     }
 
@@ -198,8 +198,8 @@ def test_generic_failure_preserves_an_existing_component_error(tmp_path):
     changed = fail_startup_status(
         status_path,
         component_id=None,
-        message="OpenFlight server exited during startup",
-        recovery="Relaunch OpenFlight.",
+        message="OpenSwing server exited during startup",
+        recovery="Relaunch OpenSwing.",
         log_path="/logs",
         preserve_existing=True,
     )
@@ -373,11 +373,11 @@ def test_server_publishes_ops_failure_and_cleans_up(tmp_path, monkeypatch):
         (
             "IWR6843 did not acknowledge 'sensorStop'; the firmware may be wedged "
             "(press RESET and retry)",
-            "Press RESET on the TI radar, then relaunch OpenFlight.",
+            "Press RESET on the TI radar, then relaunch OpenSwing.",
         ),
         (
             "IWR6843 serial port is unavailable",
-            "Check the TI radar USB and power connections, then relaunch OpenFlight.",
+            "Check the TI radar USB and power connections, then relaunch OpenSwing.",
         ),
     ],
 )

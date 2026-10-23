@@ -120,4 +120,13 @@ describe('PanelFooter', () => {
     expect(html).toContain('aria-label="Panels"');
     expect(html.match(/panel-header__divider/g)).toHaveLength(5);
   });
+
+  it('shows the OpenSwing wordmark in the menu button, which keeps its label', () => {
+    const html = render();
+    const menuButton = html.match(/<button[^>]*panel-footer__menu[^>]*>[\s\S]*?<\/button>/)?.[0] ?? '';
+
+    expect(menuButton).toContain('aria-label="Open menu"');
+    expect(menuButton).toContain('src="/openswing-logo-on-dark-transparent.svg"');
+    expect(menuButton).not.toContain('<svg');
+  });
 });
