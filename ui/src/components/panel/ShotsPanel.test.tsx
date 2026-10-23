@@ -189,4 +189,53 @@ describe('ShotsPanel', () => {
     expect(render([makeShot()])).toContain('panel shots-panel');
     expect(css).toMatch(/\.panel\.shots-panel \{[^}]*background: var\(--color-surface\)/);
   });
+
+  it('pins swing-speed row values in column order under the golf headers', () => {
+    const html = render([
+      makeShot({
+        mode: 'swing-speed',
+        club: 'Swing Speed',
+        club_speed_mph: 104.25,
+        training_implement_label: 'Stack 100g',
+        swing_speed_reading_count: 7,
+        swing_speed_trigger_mph: 60,
+        swing_speed_duration_ms: 120,
+      }),
+    ]);
+    const values = [...html.matchAll(/shots-panel__value[^"]*">([^<]*)</g)].map((match) => match[1]);
+    const headers = [...html.matchAll(/<span class="shots-panel__num">([^<]*)</g)].map((match) => match[1]);
+
+    expect(values).toEqual(['104.3', '—', '7', '60.0', '120']);
+    expect(headers).toEqual(['Ball', 'Club', 'Launch', 'Spin', 'Carry']);
+  });
+
+  it('labels pitch columns and reuses the speed-only row layout', () => {
+    const html = render([
+      makeShot({
+        mode: 'pitch-speed',
+        club: 'Pitch',
+        club_speed_mph: 58.14,
+        training_implement_label: 'Pitch',
+        swing_speed_reading_count: 11,
+        swing_speed_trigger_mph: 41,
+        swing_speed_duration_ms: 230,
+      }),
+    ]);
+    const values = [...html.matchAll(/shots-panel__value[^"]*">([^<]*)</g)].map((match) => match[1]);
+    const headers = [...html.matchAll(/<span class="shots-panel__num">([^<]*)</g)].map((match) => match[1]);
+
+    expect(headers).toEqual(['Speed', '', 'Reads', 'Trigger', 'ms']);
+    expect(values).toEqual(['58.1', '—', '11', '41.0', '230']);
+    expect(html).toContain('shots-panel__profile-club">Pitch<');
+  });
+
+  it('keeps golf headers when pitches are mixed with ball strikes', () => {
+    const html = render([
+      makeShot({ timestamp: 'a' }),
+      makeShot({ mode: 'pitch-speed', club: 'Pitch', timestamp: 'b' }),
+    ]);
+    const headers = [...html.matchAll(/<span class="shots-panel__num">([^<]*)</g)].map((match) => match[1]);
+
+    expect(headers).toEqual(['Ball', 'Club', 'Launch', 'Spin', 'Carry']);
+  });
 });

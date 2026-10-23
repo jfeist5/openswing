@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CameraCaptureSettings } from '../stores/useCameraStore';
 import type { Shot } from '../types/shot';
-import { computeSwingSpeedStats, getSwingSpeedMph, isSwingSpeedShot } from '../types/shot';
+import { computeSpeedStats, getPeakSpeedMph, getShotKind, isSpeedOnlyKind } from '../types/shot';
 import { useUnitPreference } from '../state/useUnitPreference';
 import { formatDistance, formatSpeed, getDistanceUnit, getSpeedUnit } from '../utils/units';
 import { getServerOrigin } from '../utils/serverOrigin';
@@ -192,29 +192,37 @@ export function DisplayMode({ connected, captureSettings, latestShot, shots }: D
     return () => window.clearInterval(timer);
   }, [cameraAvailable]);
   const { unitSystem } = useUnitPreference();
-  const isSwingSpeedSession = latestShot ? isSwingSpeedShot(latestShot) : false;
-  const swingStats = computeSwingSpeedStats(shots);
-  const metrics = isSwingSpeedSession
-    ? [
-        {
-          label: t('display.lastSwing'),
-          value: formatSpeed(swingStats.last_speed_mph, unitSystem, 1),
-          unit: getSpeedUnit(unitSystem),
-        },
-        {
-          label: t('metric.best'),
-          value: formatSpeed(swingStats.best_speed_mph, unitSystem, 1),
-          unit: getSpeedUnit(unitSystem),
-          detail: t('display.thisSession'),
-        },
-        {
-          label: t('metric.average'),
-          value: formatSpeed(swingStats.avg_speed_mph, unitSystem, 1),
-          unit: getSpeedUnit(unitSystem),
-        },
-        { label: t('metric.swings'), value: String(swingStats.count) },
-      ]
-    : buildMetrics(latestShot, unitSystem, t);
+  const latestKind = latestShot ? getShotKind(latestShot) : 'ball-strike';
+  const isPitch = latestKind === 'pitch-speed';
+  let metrics: DisplayMetric[];
+  if (isSpeedOnlyKind(latestKind)) {
+    const speedStats = computeSpeedStats(shots, latestKind);
+    metrics = [
+      {
+        label: isPitch ? t('display.lastPitch') : t('display.lastSwing'),
+        value: formatSpeed(speedStats.last_speed_mph, unitSystem, 1),
+        unit: getSpeedUnit(unitSystem),
+      },
+      {
+        label: t('metric.best'),
+        value: formatSpeed(speedStats.best_speed_mph, unitSystem, 1),
+        unit: getSpeedUnit(unitSystem),
+        detail: t('display.thisSession'),
+      },
+      {
+        label: t('metric.average'),
+        value: formatSpeed(speedStats.avg_speed_mph, unitSystem, 1),
+        unit: getSpeedUnit(unitSystem),
+      },
+      { label: isPitch ? t('metric.pitches') : t('metric.swings'), value: String(speedStats.count) },
+    ];
+  } else {
+    metrics = buildMetrics(latestShot, unitSystem, t);
+  }
+  let title: string;
+  if (latestKind === 'swing-speed') title = t('display.swingSpeed');
+  else if (isPitch) title = t('app.pitchSpeed');
+  else title = latestShot ? latestShot.club : t('display.ready');
   const recentShots = shots.slice(-RECENT_SHOT_COUNT).reverse();
   const cameraKey = `${captureSettings.available}-${captureSettings.running}`;
   const cameraError = failedCameraKey === cameraKey;
@@ -252,9 +260,7 @@ export function DisplayMode({ connected, captureSettings, latestShot, shots }: D
 
         <div className="display-mode__shot-panel">
           <div className="display-mode__eyebrow">{t('display.eyebrow')}</div>
-          <h1 className="display-mode__title">
-            {isSwingSpeedSession ? t('display.swingSpeed') : latestShot ? latestShot.club : t('display.ready')}
-          </h1>
+          <h1 className="display-mode__title">{title}</h1>
           <div className="display-mode__primary-grid">
             {toMetricCard(metrics[0], true)}
             {toMetricCard(metrics[1], true)}
@@ -267,24 +273,27 @@ export function DisplayMode({ connected, captureSettings, latestShot, shots }: D
         {recentShots.length === 0 ? (
           <div className="display-mode__empty-strip">{t('display.recentEmpty')}</div>
         ) : (
-          recentShots.map((shot, index) => (
-            <div className="display-shot-chip" key={shot.timestamp}>
-              <span className="display-shot-chip__number">#{shots.length - index}</span>
-              <span className="display-shot-chip__club">
-                {isSwingSpeedShot(shot) ? (shot.training_implement_label ?? shot.club) : shot.club}
-              </span>
-              <span className="display-shot-chip__stat">
-                {formatSpeed(isSwingSpeedShot(shot) ? getSwingSpeedMph(shot) : shot.ball_speed_mph, unitSystem, 0)}{' '}
-                {getSpeedUnit(unitSystem)}
-              </span>
-              {!isSwingSpeedShot(shot) && (
-                <span className="display-shot-chip__stat">
-                  {formatDistance(shot.carry_spin_adjusted ?? shot.estimated_carry_yards, unitSystem, 0)}{' '}
-                  {getDistanceUnit(unitSystem)}
+          recentShots.map((shot, index) => {
+            const speedOnly = isSpeedOnlyKind(getShotKind(shot));
+            return (
+              <div className="display-shot-chip" key={shot.timestamp}>
+                <span className="display-shot-chip__number">#{shots.length - index}</span>
+                <span className="display-shot-chip__club">
+                  {speedOnly ? (shot.training_implement_label ?? shot.club) : shot.club}
                 </span>
-              )}
-            </div>
-          ))
+                <span className="display-shot-chip__stat">
+                  {formatSpeed(speedOnly ? getPeakSpeedMph(shot) : shot.ball_speed_mph, unitSystem, 0)}{' '}
+                  {getSpeedUnit(unitSystem)}
+                </span>
+                {!speedOnly && (
+                  <span className="display-shot-chip__stat">
+                    {formatDistance(shot.carry_spin_adjusted ?? shot.estimated_carry_yards, unitSystem, 0)}{' '}
+                    {getDistanceUnit(unitSystem)}
+                  </span>
+                )}
+              </div>
+            );
+          })
         )}
       </section>
     </main>

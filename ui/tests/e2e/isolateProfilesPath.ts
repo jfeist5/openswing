@@ -8,4 +8,3 @@ export const PROFILES_PATH_ENV = 'OPENFLIGHT_PROFILES_PATH';
 export function uniqueE2eProfilesPath(workerId: string | number = process.pid): string {
   return join(mkdtempSync(join(tmpdir(), `openflight-e2e-w${workerId}-`)), 'profiles.json');
 }
-

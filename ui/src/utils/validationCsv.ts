@@ -1,5 +1,5 @@
 import type { Shot } from '../types/shot';
-import { getSwingSpeedMph, isSwingSpeedShot } from '../types/shot';
+import { getPeakSpeedMph, getShotKind, isSpeedOnlyKind } from '../types/shot';
 import { getEmptyValidationEntry, type ValidationEntry } from '../stores/useValidationStore';
 
 function csvValue(value: string | number | null | undefined): string {
@@ -10,7 +10,7 @@ function csvValue(value: string | number | null | undefined): string {
 
 /** OpenFlight speed for a shot in the unit the CSV records (always mph). */
 export function openflightSpeedMph(shot: Shot): number {
-  return isSwingSpeedShot(shot) ? getSwingSpeedMph(shot) : shot.ball_speed_mph;
+  return isSpeedOnlyKind(getShotKind(shot)) ? getPeakSpeedMph(shot) : shot.ball_speed_mph;
 }
 
 /** Signed difference against the comparator device, or null if none entered. */

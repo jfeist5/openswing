@@ -137,7 +137,7 @@ function AppContent() {
   } else if (picker.kind === 'club') {
     activeImplementLabel = getClubName(selectedClub);
   } else {
-    activeImplementLabel = t(picker.labelKey);
+    activeImplementLabel = picker.labelKey ? t(picker.labelKey) : '';
   }
 
   useEffect(() => {
@@ -384,7 +384,7 @@ function AppContent() {
             </div>
           </div>
         )}
-        {mockMode && currentView === 'live' ? (
+        {mockMode && currentView === 'live' && modeFeatures.simulateLabelKey ? (
           <SimulateBubble label={t(modeFeatures.simulateLabelKey)} onSimulate={() => socketService.simulateShot()} />
         ) : null}
       </main>

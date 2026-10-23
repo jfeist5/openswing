@@ -1,12 +1,13 @@
 import { expect, type Page } from '@playwright/test';
 import { io, type Socket } from 'socket.io-client';
 
-const UI_URL = 'http://127.0.0.1:5173';
 const SOCKET_URL = 'http://127.0.0.1:8080';
+/** Backend started with --mock-pitch-speed for the `pitch` Playwright project. */
+export const PITCH_SOCKET_URL = 'http://127.0.0.1:8081';
 
-function connectSocket(): Promise<Socket> {
+function connectSocket(url: string): Promise<Socket> {
   return new Promise((resolve, reject) => {
-    const socket = io(SOCKET_URL, {
+    const socket = io(url, {
       transports: ['websocket', 'polling'],
     });
 
@@ -26,8 +27,8 @@ function connectSocket(): Promise<Socket> {
   });
 }
 
-export async function withControlSocket<T>(run: (socket: Socket) => Promise<T>): Promise<T> {
-  const socket = await connectSocket();
+export async function withControlSocket<T>(run: (socket: Socket) => Promise<T>, url: string = SOCKET_URL): Promise<T> {
+  const socket = await connectSocket(url);
 
   try {
     return await run(socket);
@@ -104,8 +105,9 @@ export async function resetSession(socket: Socket) {
   }
 }
 
+/** Opens the UI of the current Playwright project (its baseURL). */
 export async function gotoApp(page: Page, path = '/') {
-  await page.goto(`${UI_URL}${path}`);
+  await page.goto(path);
 }
 
 /** Production kiosk sizes the Live grid must fit. */
@@ -123,9 +125,9 @@ export const WIDEST_LIVE_METRIC_VALUE = '10,000';
 
 export async function liveMetricValueFontSizes(page: Page): Promise<number[]> {
   await page.evaluate(() => document.fonts.ready);
-  return page.locator('.live-panel__grid .metric-card__value').evaluateAll((values) =>
-    values.map((value) => parseFloat(getComputedStyle(value).fontSize))
-  );
+  return page
+    .locator('.live-panel__grid .metric-card__value')
+    .evaluateAll((values) => values.map((value) => parseFloat(getComputedStyle(value).fontSize)));
 }
 
 export async function overflowingLiveMetricValues(page: Page): Promise<string[]> {
@@ -175,10 +177,8 @@ export async function overflowingLiveMetricValues(page: Page): Promise<string[]>
         textRect.bottom > cardRect.bottom + slop ||
         textRect.top < cardRect.top - slop;
       const rowOverflowsCard = rowRect.right > cardRect.right + slop || row.scrollWidth > row.clientWidth + slop;
-      const overlapsLabel =
-        label instanceof HTMLElement && rowRect.top < label.getBoundingClientRect().bottom - slop;
-      const overlapsMeta =
-        meta instanceof HTMLElement && rowRect.bottom > meta.getBoundingClientRect().top + slop;
+      const overlapsLabel = label instanceof HTMLElement && rowRect.top < label.getBoundingClientRect().bottom - slop;
+      const overlapsMeta = meta instanceof HTMLElement && rowRect.bottom > meta.getBoundingClientRect().top + slop;
 
       if (
         valueOverflowsCard ||

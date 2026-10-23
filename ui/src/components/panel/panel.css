@@ -609,6 +609,12 @@
   grid-template-rows: 1fr;
 }
 
+/* Pitch-speed sessions produce four tiles in one row. */
+.live-panel__grid--of-4 {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr;
+}
+
 .live-panel__grid .metric-card {
   container-type: size;
   min-width: 0;

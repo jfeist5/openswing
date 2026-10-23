@@ -38,23 +38,21 @@ describe('App shell', () => {
     expect(html).toContain('panel-header__title">Live<');
   });
 
-  it('opens on the club picker so the club is confirmed before the first shot', () => {
+  it('shows no mode-specific controls until the server reports its mode', () => {
     const html = renderToString(<App />);
 
-    expect(html).toContain('aria-label="Select club"');
-    // Driver is the default and is pre-selected.
-    expect(html).toMatch(/picker-overlay__option--selected[^>]*aria-pressed="true"[^>]*>DR</);
-    // ...and it is dismissible, so skipping keeps the default.
-    expect(html).toContain('aria-label="Close Select club"');
+    // Golf, swing, and pitch pickers are covered per mode in App.modes.test.tsx.
+    expect(html).not.toContain('picker-overlay');
+    expect(html).not.toContain('Change club');
+    expect(html).not.toContain('panel-header__club');
+    expect(html).not.toContain('Simulate');
   });
 
-  it('offers the club change action in the Live header', () => {
+  it('keeps header actions out of the footer', () => {
     const html = renderToString(<App />);
 
-    expect(html).toContain('Change club');
     expect(html).not.toContain('panel-footer__action');
     expect(html).not.toContain('panel-action__value');
-    expect(html).toContain('panel-header__club">Driver<');
   });
 
   it('puts units in the Live footer', () => {

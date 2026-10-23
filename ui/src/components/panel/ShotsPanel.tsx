@@ -1,7 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Shot } from '../../types/shot';
-import { filterShotsByProfile, getSwingSpeedMph, isSwingSpeedShot } from '../../types/shot';
+import {
+  filterShotsByProfile,
+  getPeakSpeedMph,
+  getShotKind,
+  getSpeedSessionKind,
+  isSpeedOnlyKind,
+} from '../../types/shot';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { useUnitPreference } from '../../state/useUnitPreference';
 import { useSystemStore } from '../../stores/useSystemStore';
@@ -34,11 +40,11 @@ function optionalNumber(value: number | null | undefined, digits = 1, signed = f
 
 /** The five numeric columns of a row, in the order design doc 7b draws them. */
 function rowValues(shot: Shot, unitSystem: UnitSystem): string[] {
-  if (isSwingSpeedShot(shot)) {
-    // A swing-speed shot has no ball flight; reuse the columns for its own data
+  if (isSpeedOnlyKind(getShotKind(shot))) {
+    // A speed-only shot has no ball flight; reuse the columns for its own data
     // so the grid stays aligned with ball-strike rows.
     return [
-      formatSpeed(getSwingSpeedMph(shot), unitSystem, 1),
+      formatSpeed(getPeakSpeedMph(shot), unitSystem, 1),
       '—',
       optionalNumber(shot.swing_speed_reading_count, 0),
       optionalNumber(shot.swing_speed_trigger_mph),
@@ -135,6 +141,11 @@ export function ShotsPanel({ shots, profileId, profileName, clubLabel, onDeleteS
   );
 
   const profileShots = useMemo(() => filterShotsByProfile(shots, profileId), [shots, profileId]);
+  // The second column is left unlabeled for pitches; it is reserved for pitch type.
+  const columnHeaders =
+    getSpeedSessionKind(profileShots) === 'pitch-speed'
+      ? [t('shots.colSpeed'), '', t('shots.colReadings'), t('shots.colTrigger'), t('shots.colDuration')]
+      : [t('shots.colBall'), t('shots.colClub'), t('shots.colLaunch'), t('shots.colSpin'), t('shots.colCarry')];
   const visibleShots = useMemo(() => [...profileShots].reverse(), [profileShots]);
   const validatedCount = useMemo(
     () => profileShots.filter((shot) => entries[shot.timestamp]?.comparatorSpeed).length,
@@ -200,11 +211,11 @@ export function ShotsPanel({ shots, profileId, profileName, clubLabel, onDeleteS
       <div className="shots-panel__columns" role="presentation">
         <span>{t('shots.colShot')}</span>
         <span>{t('shots.colProfile')}</span>
-        <span className="shots-panel__num">{t('shots.colBall')}</span>
-        <span className="shots-panel__num">{t('shots.colClub')}</span>
-        <span className="shots-panel__num">{t('shots.colLaunch')}</span>
-        <span className="shots-panel__num">{t('shots.colSpin')}</span>
-        <span className="shots-panel__num">{t('shots.colCarry')}</span>
+        {columnHeaders.map((header, index) => (
+          <span className="shots-panel__num" key={index}>
+            {header}
+          </span>
+        ))}
         <span />
       </div>
       <div

@@ -1,5 +1,5 @@
-import type { Shot, SpinQuality, SwingSpeedStats } from '../../types/shot';
-import { getSwingSpeedMph, isSwingSpeedShot } from '../../types/shot';
+import type { Shot, SpeedStats, SpinQuality, SwingSpeedStats } from '../../types/shot';
+import { getPeakSpeedMph, getShotKind, getSwingSpeedMph } from '../../types/shot';
 import type { UnitSystem } from '../../utils/units';
 import { formatDistance, formatSpeed, getDistanceUnit, getSpeedUnit } from '../../utils/units';
 import { getHtmlLang, t } from '../../i18n';
@@ -31,6 +31,12 @@ export const LIVE_METRIC_COUNT = 10;
 
 /** Metric count for a swing-speed session: a single 5-tile row. */
 export const SWING_METRIC_COUNT = 5;
+
+/**
+ * Metric count for a pitch-speed session: a single 4-tile row. Pitch type and
+ * spin rate are per-pitch metrics planned for a second row.
+ */
+export const PITCH_METRIC_COUNT = 4;
 
 function formatOptionalAngle(value: number | null, signed = false): string {
   if (value === null) return NO_VALUE;
@@ -246,16 +252,56 @@ function buildSwingSpeedMetrics(shot: Shot, stats: SwingSpeedStats, unitSystem: 
   ];
 }
 
+function buildPitchSpeedMetrics(shot: Shot, stats: SpeedStats, unitSystem: UnitSystem): LiveMetric[] {
+  const speedUnit = getSpeedUnit(unitSystem);
+
+  return [
+    {
+      id: 'pitch_last',
+      label: t('metric.lastPitch'),
+      value: formatSpeed(getPeakSpeedMph(shot), unitSystem, 1),
+      unit: speedUnit,
+    },
+    {
+      id: 'pitch_best',
+      label: t('metric.best'),
+      value: formatSpeed(stats.best_speed_mph, unitSystem, 1),
+      unit: speedUnit,
+    },
+    {
+      id: 'pitch_avg',
+      label: t('metric.average'),
+      value: formatSpeed(stats.avg_speed_mph, unitSystem, 1),
+      unit: speedUnit,
+    },
+    {
+      id: 'pitch_count',
+      label: t('metric.pitches'),
+      value: String(stats.count),
+      subtext:
+        shot.swing_speed_reading_count === undefined
+          ? undefined
+          : t('metric.readingsCount', { count: shot.swing_speed_reading_count }),
+    },
+  ];
+}
+
 /**
  * Build the fixed metric list for the Live panel. Returns {@link LIVE_METRIC_COUNT}
- * entries for a ball-strike shot and {@link SWING_METRIC_COUNT} for a swing-speed
- * one; the two sets share no ids, so a selected-metric choice never leaks across
- * modes.
+ * entries for a ball-strike shot, {@link SWING_METRIC_COUNT} for a swing-speed one,
+ * and {@link PITCH_METRIC_COUNT} for a pitch. The sets share no ids, so a
+ * selected-metric choice never leaks across modes. `speedStats` must be computed
+ * for the shot's own kind.
  */
-export function buildLiveMetrics(shot: Shot, unitSystem: UnitSystem, swingStats: SwingSpeedStats): LiveMetric[] {
-  return isSwingSpeedShot(shot)
-    ? buildSwingSpeedMetrics(shot, swingStats, unitSystem)
-    : buildBallStrikeMetrics(shot, unitSystem);
+export function buildLiveMetrics(shot: Shot, unitSystem: UnitSystem, speedStats: SpeedStats): LiveMetric[] {
+  switch (getShotKind(shot)) {
+    case 'swing-speed':
+      return buildSwingSpeedMetrics(shot, speedStats, unitSystem);
+    case 'pitch-speed':
+      return buildPitchSpeedMetrics(shot, speedStats, unitSystem);
+    case 'ball-strike':
+      return buildBallStrikeMetrics(shot, unitSystem);
+  }
 }
 
 /**

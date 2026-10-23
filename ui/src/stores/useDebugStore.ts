@@ -33,7 +33,7 @@ export const useDebugStore = create<DebugState>((set) => ({
   },
   triggerDiagnostics: [],
   triggerStatus: {
-    mode: 'rolling-buffer',
+    mode: 'connecting',
     trigger_type: null,
     radar_connected: false,
     radar_port: null,

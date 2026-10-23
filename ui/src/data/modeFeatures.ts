@@ -7,7 +7,7 @@ export type MonitorMode = TriggerStatus['mode'];
 export type PickerFeature =
   | { kind: 'club'; titleKey: MessageKey; changeKey: MessageKey; wide: false }
   | { kind: 'implement'; titleKey: MessageKey; changeKey: MessageKey; wide: true }
-  | { kind: 'none'; labelKey: MessageKey };
+  | { kind: 'none'; labelKey: MessageKey | null };
 
 export interface SpeedRange {
   min: number;
@@ -24,10 +24,18 @@ export interface SpeedGateTuning {
 
 export interface ModeFeatures {
   picker: PickerFeature;
-  simulateLabelKey: MessageKey;
+  /** Null hides the mock Simulate button. */
+  simulateLabelKey: MessageKey | null;
   /** Null means the golf min-speed and magnitude filters, which are disabled in mock mode. */
   speedGates: SpeedGateTuning | null;
 }
+
+// Until the server reports its mode, show nothing mode-specific so no golf UI flashes.
+const CONNECTING_FEATURES: ModeFeatures = Object.freeze({
+  picker: Object.freeze({ kind: 'none', labelKey: null }),
+  simulateLabelKey: null,
+  speedGates: null,
+});
 
 const GOLF_FEATURES: ModeFeatures = Object.freeze({
   picker: Object.freeze({ kind: 'club', titleKey: 'app.selectClub', changeKey: 'app.changeClub', wide: false }),
@@ -64,6 +72,7 @@ const PITCH_SPEED_FEATURES: ModeFeatures = Object.freeze({
 });
 
 const FEATURES_BY_MODE: Readonly<Record<MonitorMode, ModeFeatures>> = Object.freeze({
+  connecting: CONNECTING_FEATURES,
   'rolling-buffer': GOLF_FEATURES,
   mock: GOLF_FEATURES,
   'swing-speed': SWING_SPEED_FEATURES,

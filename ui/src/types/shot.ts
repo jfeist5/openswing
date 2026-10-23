@@ -127,7 +127,8 @@ export interface TriggerDiagnosticUpdate {
 }
 
 export interface TriggerStatus {
-  mode: 'rolling-buffer' | 'mock' | 'swing-speed' | 'pitch-speed';
+  /** 'connecting' is UI-only: the server has not reported its mode yet. */
+  mode: 'connecting' | 'rolling-buffer' | 'mock' | 'swing-speed' | 'pitch-speed';
   trigger_type: string | null;
   radar_connected: boolean;
   radar_port: string | null;
@@ -136,26 +137,51 @@ export interface TriggerStatus {
   triggers_rejected: number;
 }
 
-export interface SwingSpeedStats {
+export interface SpeedStats {
   count: number;
   last_speed_mph: number;
   best_speed_mph: number;
   avg_speed_mph: number;
 }
 
-export interface SwingSpeedStatsFilter {
+export type SwingSpeedStats = SpeedStats;
+
+export interface SpeedStatsFilter {
   profileId?: string | null;
   trainingImplement?: string | null;
   club?: string | null;
 }
 
-export function isSwingSpeedShot(shot: Shot | null): boolean {
-  return shot?.mode === 'swing-speed' || shot?.club === 'Swing Speed';
+export type SwingSpeedStatsFilter = SpeedStatsFilter;
+
+/** Ball strikes come from the rolling buffer; speed-only kinds are radar-gun peaks with no ball flight. */
+export type ShotKind = 'ball-strike' | 'swing-speed' | 'pitch-speed';
+export type SpeedOnlyShotKind = Exclude<ShotKind, 'ball-strike'>;
+
+export function getShotKind(shot: Shot): ShotKind {
+  if (shot.mode === 'pitch-speed') return 'pitch-speed';
+  if (shot.mode === 'swing-speed' || shot.club === 'Swing Speed') return 'swing-speed';
+  return 'ball-strike';
 }
 
-export function getSwingSpeedMph(shot: Shot): number {
+export function isSpeedOnlyKind(kind: ShotKind): kind is SpeedOnlyShotKind {
+  return kind !== 'ball-strike';
+}
+
+export function isSwingSpeedShot(shot: Shot | null): boolean {
+  return shot !== null && getShotKind(shot) === 'swing-speed';
+}
+
+export function isPitchSpeedShot(shot: Shot | null): boolean {
+  return shot !== null && getShotKind(shot) === 'pitch-speed';
+}
+
+/** Peak speed of a speed-only shot; the server stamps it on club speed. */
+export function getPeakSpeedMph(shot: Shot): number {
   return shot.club_speed_mph ?? shot.ball_speed_mph;
 }
+
+export const getSwingSpeedMph = getPeakSpeedMph;
 
 export function filterShotsByProfile(shots: Shot[], profileId: string): Shot[] {
   if (!profileId) return [];
@@ -171,13 +197,13 @@ function normalizeToken(value: string | null | undefined): string {
   return (value?.trim() || '').toLowerCase();
 }
 
-export function filterSwingSpeedShots(shots: Shot[], filter: SwingSpeedStatsFilter = {}): Shot[] {
+export function filterSpeedShots(shots: Shot[], kind: SpeedOnlyShotKind, filter: SpeedStatsFilter = {}): Shot[] {
   const scoped = filter.profileId ? filterShotsByProfile(shots, filter.profileId) : shots;
   const trainingImplement = normalizeToken(filter.trainingImplement);
   const club = normalizeToken(filter.club);
 
   return scoped.filter((shot) => {
-    if (!isSwingSpeedShot(shot)) {
+    if (getShotKind(shot) !== kind) {
       return false;
     }
 
@@ -201,10 +227,14 @@ export function filterSwingSpeedShots(shots: Shot[], filter: SwingSpeedStatsFilt
   });
 }
 
-export function computeSwingSpeedStats(shots: Shot[], filter: SwingSpeedStatsFilter = {}): SwingSpeedStats {
-  const swingSpeeds = filterSwingSpeedShots(shots, filter).map(getSwingSpeedMph);
+export function filterSwingSpeedShots(shots: Shot[], filter: SpeedStatsFilter = {}): Shot[] {
+  return filterSpeedShots(shots, 'swing-speed', filter);
+}
 
-  if (swingSpeeds.length === 0) {
+export function computeSpeedStats(shots: Shot[], kind: SpeedOnlyShotKind, filter: SpeedStatsFilter = {}): SpeedStats {
+  const speeds = filterSpeedShots(shots, kind, filter).map(getPeakSpeedMph);
+
+  if (speeds.length === 0) {
     return {
       count: 0,
       last_speed_mph: 0,
@@ -213,14 +243,26 @@ export function computeSwingSpeedStats(shots: Shot[], filter: SwingSpeedStatsFil
     };
   }
 
-  const total = swingSpeeds.reduce((sum, speed) => sum + speed, 0);
+  const total = speeds.reduce((sum, speed) => sum + speed, 0);
 
   return {
-    count: swingSpeeds.length,
-    last_speed_mph: swingSpeeds[swingSpeeds.length - 1],
-    best_speed_mph: Math.max(...swingSpeeds),
-    avg_speed_mph: total / swingSpeeds.length,
+    count: speeds.length,
+    last_speed_mph: speeds[speeds.length - 1],
+    best_speed_mph: Math.max(...speeds),
+    avg_speed_mph: total / speeds.length,
   };
+}
+
+/** The speed-only kind shared by every shot, or null for an empty or mixed/ball-strike list. */
+export function getSpeedSessionKind(shots: Shot[]): SpeedOnlyShotKind | null {
+  if (shots.length === 0) return null;
+  const kind = getShotKind(shots[0]);
+  if (!isSpeedOnlyKind(kind)) return null;
+  return shots.every((shot) => getShotKind(shot) === kind) ? kind : null;
+}
+
+export function computeSwingSpeedStats(shots: Shot[], filter: SpeedStatsFilter = {}): SpeedStats {
+  return computeSpeedStats(shots, 'swing-speed', filter);
 }
 
 /**

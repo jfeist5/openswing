@@ -1,12 +1,14 @@
 import { useMemo, type ReactNode } from 'react';
-import type { Shot } from '../../types/shot';
-import { computeSwingSpeedStats, filterShotsByProfile } from '../../types/shot';
+import type { Shot, SpeedStats } from '../../types/shot';
+import { computeSpeedStats, filterShotsByProfile, getShotKind, isSpeedOnlyKind } from '../../types/shot';
 import { useUnitPreference } from '../../state/useUnitPreference';
 import { useI18n } from '../../i18n/useI18n';
 import { useSharedFitFontSize } from '../../hooks/useFitFontSize';
 import { MetricCard } from '../ui/MetricCard';
 import { PanelHeader } from './PanelHeader';
 import { buildLiveMetrics, pinSelectedMetric } from './liveMetrics';
+
+const EMPTY_SPEED_STATS: SpeedStats = { count: 0, last_speed_mph: 0, best_speed_mph: 0, avg_speed_mph: 0 };
 
 interface LivePanelProps {
   shot: Shot | null;
@@ -47,17 +49,21 @@ export function LivePanel({
   const displayedShot = profileShots[profileShots.length - 1] ?? null;
   const isProfileNewShot = Boolean(isNewShot && shot && displayedShot && shot.timestamp === displayedShot.timestamp);
 
-  const swingStats = useMemo(
-    () => computeSwingSpeedStats(profileShots, { profileId, trainingImplement: activeTrainingImplement }),
-    [profileShots, profileId, activeTrainingImplement]
+  const displayedKind = displayedShot ? getShotKind(displayedShot) : 'ball-strike';
+  const speedStats = useMemo<SpeedStats>(
+    () =>
+      isSpeedOnlyKind(displayedKind)
+        ? computeSpeedStats(profileShots, displayedKind, { profileId, trainingImplement: activeTrainingImplement })
+        : EMPTY_SPEED_STATS,
+    [displayedKind, profileShots, profileId, activeTrainingImplement]
   );
   const metrics = useMemo(
     () =>
-      displayedShot ? pinSelectedMetric(buildLiveMetrics(displayedShot, unitSystem, swingStats), selectedMetricId) : [],
+      displayedShot ? pinSelectedMetric(buildLiveMetrics(displayedShot, unitSystem, speedStats), selectedMetricId) : [],
     // locale is not read in the factory; t() is a stable import. Without it,
     // changing language would keep stale metric labels.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
-    [displayedShot, unitSystem, swingStats, selectedMetricId, locale]
+    [displayedShot, unitSystem, speedStats, selectedMetricId, locale]
   );
   const selected = metrics[0] ?? null;
   const gridRef = useSharedFitFontSize(

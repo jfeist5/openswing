@@ -190,4 +190,30 @@ describe('StatsPanel', () => {
     expect(css).toMatch(/\.stats-panel \{[^}]*background: var\(--color-surface\)/);
     expect(css).not.toMatch(/\.stats-panel__grid \.metric-card--label-above \{[^}]*align-content: center/);
   });
+
+  it('pins swing-speed tile values from the session', () => {
+    const swings = [95, 105, 98].map((speed, index) =>
+      makeShot({ mode: 'swing-speed', club: 'Swing Speed', club_speed_mph: speed, timestamp: `t${index}` })
+    );
+    const html = render(swings, 'Swing Speed');
+
+    expect(html).toMatch(/>Swings<[\s\S]*?>3</);
+    expect(html).toMatch(/>Last<[\s\S]*?>98\.0</);
+    expect(html).toMatch(/>Best<[\s\S]*?>105\.0</);
+    expect(html).toMatch(/>Average<[\s\S]*?>99\.3</);
+  });
+
+  it('renders four pitch tiles for a pitch-speed session', () => {
+    const pitches = [55, 61, 58].map((speed, index) =>
+      makeShot({ mode: 'pitch-speed', club: 'Pitch', club_speed_mph: speed, timestamp: `t${index}` })
+    );
+    const html = render(pitches, 'Pitch');
+
+    expect(html).toContain('stats-panel__grid--of-4');
+    expect(html).toMatch(/>Pitches<[\s\S]*?>3</);
+    expect(html).toMatch(/>Last<[\s\S]*?>58\.0</);
+    expect(html).toMatch(/>Best<[\s\S]*?>61\.0</);
+    expect(html).toMatch(/>Average<[\s\S]*?>58\.0</);
+    expect(html).not.toContain('>Swings<');
+  });
 });

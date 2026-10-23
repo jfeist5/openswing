@@ -64,9 +64,17 @@ describe('getModeFeatures', () => {
   );
 
   it('returns the same frozen object on every call', () => {
-    for (const mode of ['rolling-buffer', 'mock', 'swing-speed', 'pitch-speed']) {
+    for (const mode of ['connecting', 'rolling-buffer', 'mock', 'swing-speed', 'pitch-speed']) {
       expect(getModeFeatures(mode)).toBe(getModeFeatures(mode));
       expect(isDeepFrozen(getModeFeatures(mode))).toBe(true);
     }
+  });
+
+  it('shows nothing mode-specific while connecting', () => {
+    expect(getModeFeatures('connecting')).toEqual({
+      picker: { kind: 'none', labelKey: null },
+      simulateLabelKey: null,
+      speedGates: null,
+    });
   });
 });

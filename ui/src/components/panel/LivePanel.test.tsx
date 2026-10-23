@@ -236,4 +236,36 @@ describe('LivePanel', () => {
     expect(html.match(/metric-card--interactive/g)).toHaveLength(5);
     expect(tileLabels(html)[0]).toBe('Last swing');
   });
+
+  it('renders the four-tile pitch grid from pitch stats only', () => {
+    const pitch = (speed: number, timestamp: string) =>
+      makeShot({
+        mode: 'pitch-speed',
+        club: 'Pitch',
+        club_speed_mph: speed,
+        ball_speed_mph: speed,
+        profile_id: 'james',
+        timestamp,
+      });
+    const swing = makeShot({ mode: 'swing-speed', club_speed_mph: 110, profile_id: 'james', timestamp: 's1' });
+    const shots = [pitch(55, 'p1'), swing, pitch(61, 'p2'), pitch(58, 'p3')];
+    const html = text(
+      renderToString(
+        <LivePanel
+          shot={shots[3]}
+          shots={shots}
+          profileId="james"
+          profileName="James"
+          clubLabel="Pitch Speed"
+          onSelectMetric={() => {}}
+        />
+      )
+    );
+
+    expect(html).toContain('live-panel__grid--of-4');
+    expect(html.match(/metric-card--interactive/g)).toHaveLength(4);
+    expect(tileLabels(html)).toEqual(['Last pitch', 'Best', 'Average', 'Pitches']);
+    expect(html).toMatch(/>Best<[\s\S]*?>61\.0</);
+    expect(html).toMatch(/>Pitches<[\s\S]*?>3</);
+  });
 });

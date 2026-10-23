@@ -5,6 +5,7 @@ import {
   LIVE_METRIC_COUNT,
   NO_VALUE,
   pinSelectedMetric,
+  PITCH_METRIC_COUNT,
   SWING_METRIC_COUNT,
   type LiveMetric,
 } from './liveMetrics';
@@ -256,6 +257,60 @@ describe('buildLiveMetrics', () => {
 
     const shared = swing.map((m) => m.id).filter((id) => ballStrike.some((m) => m.id === id));
     expect(shared).toEqual([]);
+  });
+
+  it('pins the swing-speed tiles: ids, labels, values, and subtexts in order', () => {
+    const stats: SwingSpeedStats = { count: 12, last_speed_mph: 101, best_speed_mph: 108, avg_speed_mph: 99 };
+    const swing = buildLiveMetrics(
+      makeShot({
+        mode: 'swing-speed',
+        club_speed_mph: 101.2,
+        training_implement_label: 'Stack 100g',
+        swing_speed_reading_count: 7,
+        swing_speed_trigger_mph: 41.25,
+      }),
+      'imperial',
+      stats
+    );
+
+    expect(swing.map(({ id, label, value, unit, subtext }) => ({ id, label, value, unit, subtext }))).toEqual([
+      { id: 'swing_last', label: 'Last swing', value: '101.2', unit: 'mph', subtext: undefined },
+      { id: 'swing_best', label: 'Best', value: '108.0', unit: 'mph', subtext: 'profile + implement' },
+      { id: 'swing_avg', label: 'Average', value: '99.0', unit: 'mph', subtext: '12 swings' },
+      { id: 'swing_count', label: 'Swings', value: '12', unit: undefined, subtext: '7 readings' },
+      { id: 'swing_implement', label: 'Implement', value: 'Stack 100g', unit: undefined, subtext: '41.3 mph trigger' },
+    ]);
+  });
+
+  it('returns four pitch tiles in order with ids unique to pitch mode', () => {
+    const stats: SwingSpeedStats = { count: 24, last_speed_mph: 58.1, best_speed_mph: 61.4, avg_speed_mph: 57.9 };
+    const pitch = buildLiveMetrics(
+      makeShot({ mode: 'pitch-speed', club: 'Pitch', club_speed_mph: 58.1, swing_speed_reading_count: 11 }),
+      'imperial',
+      stats
+    );
+
+    expect(pitch).toHaveLength(PITCH_METRIC_COUNT);
+    expect(pitch.map(({ id, label, value, unit, subtext }) => ({ id, label, value, unit, subtext }))).toEqual([
+      { id: 'pitch_last', label: 'Last pitch', value: '58.1', unit: 'mph', subtext: undefined },
+      { id: 'pitch_best', label: 'Best', value: '61.4', unit: 'mph', subtext: undefined },
+      { id: 'pitch_avg', label: 'Average', value: '57.9', unit: 'mph', subtext: undefined },
+      { id: 'pitch_count', label: 'Pitches', value: '24', unit: undefined, subtext: '11 readings' },
+    ]);
+
+    const otherIds = [
+      ...buildLiveMetrics(makeShot(), 'imperial', emptySwingStats),
+      ...buildLiveMetrics(makeShot({ mode: 'swing-speed' }), 'imperial', emptySwingStats),
+    ].map((m) => m.id);
+    expect(pitch.filter((m) => otherIds.includes(m.id))).toEqual([]);
+  });
+
+  it('formats pitch speeds in metric units', () => {
+    const stats: SwingSpeedStats = { count: 1, last_speed_mph: 60, best_speed_mph: 60, avg_speed_mph: 60 };
+    const [last] = buildLiveMetrics(makeShot({ mode: 'pitch-speed', club_speed_mph: 60 }), 'metric', stats);
+
+    expect(last.unit).toBe('km/h');
+    expect(last.value).toBe('96.6');
   });
 });
 

@@ -73,4 +73,52 @@ describe('DisplayMode', () => {
     expect(html).toContain('experimental · rejected: no club track');
     expect(html).toContain('experimental · rejected: no pre impact frames');
   });
+
+  it('pins the swing-speed session view: title, metrics, and chips without carry', () => {
+    const swing = (speed: number, timestamp: string): Shot => ({
+      ...shot,
+      mode: 'swing-speed',
+      club: 'Swing Speed',
+      club_speed_mph: speed,
+      training_implement_label: 'Stack 60g',
+      timestamp,
+    });
+    const swings = [swing(95, 't1'), swing(105, 't2')];
+    const html = renderToString(
+      <DisplayMode connected captureSettings={captureSettings} latestShot={swings[1]} shots={swings} />
+    ).replace(/<!-- -->/g, '');
+
+    expect(html).toContain('display-mode__title">Swing Speed<');
+    for (const label of ['Last Swing', 'Best', 'Average', 'Swings']) {
+      expect(html).toContain(`>${label}<`);
+    }
+    expect(html).toContain('display-shot-chip__club">Stack 60g<');
+    expect(html).toContain('105 mph');
+    expect(html).not.toContain(' yds<');
+  });
+
+  it('shows a pitch-speed session with pitch labels and chips without carry', () => {
+    const pitch = (speed: number, timestamp: string): Shot => ({
+      ...shot,
+      mode: 'pitch-speed',
+      club: 'Pitch',
+      club_speed_mph: speed,
+      ball_speed_mph: speed,
+      training_implement_label: 'Pitch',
+      timestamp,
+    });
+    const pitches = [pitch(55, 't1'), pitch(61, 't2')];
+    const html = renderToString(
+      <DisplayMode connected captureSettings={captureSettings} latestShot={pitches[1]} shots={pitches} />
+    ).replace(/<!-- -->/g, '');
+
+    expect(html).toContain('display-mode__title">Pitch Speed<');
+    for (const label of ['Last Pitch', 'Best', 'Average', 'Pitches']) {
+      expect(html).toContain(`>${label}<`);
+    }
+    expect(html).toContain('display-shot-chip__club">Pitch<');
+    expect(html).toContain('61 mph');
+    expect(html).not.toContain(' yds<');
+    expect(html).not.toContain('Swing');
+  });
 });

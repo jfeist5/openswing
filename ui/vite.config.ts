@@ -5,10 +5,10 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    // Relative fetch('/api/shutdown') from the UI hits Vite; proxy to the mock/backend.
+    // Relative fetch('/api/shutdown') from the UI hits Vite; proxy to the same backend as the socket.
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.VITE_SOCKET_URL ?? 'http://localhost:8080',
         changeOrigin: true,
       },
     },

@@ -40,6 +40,9 @@ describe('App mode features', () => {
     const html = renderInMode('rolling-buffer');
 
     expect(html).toContain('aria-label="Select club"');
+    // Driver is the default and is pre-selected, and the picker is dismissible.
+    expect(html).toMatch(/picker-overlay__option--selected[^>]*aria-pressed="true"[^>]*>DR</);
+    expect(html).toContain('aria-label="Close Select club"');
     expect(html).not.toContain('picker-overlay--wide');
     expect(html).toContain('Change club');
     expect(html).toContain('panel-header__club">Driver<');
@@ -92,5 +95,14 @@ describe('App mode features', () => {
 
     expect(html).toContain('aria-label="Select club"');
     expect(html).toContain('Change club');
+  });
+
+  it('shows nothing mode-specific while connecting, even in mock mode', () => {
+    const html = renderInMode('connecting', true);
+
+    expect(html).not.toContain('picker-overlay');
+    expect(html).not.toContain('Change club');
+    expect(html).not.toContain('panel-header__club');
+    expect(html).not.toContain('Simulate');
   });
 });

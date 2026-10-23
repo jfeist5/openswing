@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Shot } from '../../types/shot';
 import {
+  computeSpeedStats,
   computeStats,
-  computeSwingSpeedStats,
   filterShotsByProfile,
+  getSpeedSessionKind,
   getUniqueClubs,
-  isSwingSpeedShot,
 } from '../../types/shot';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { useUnitPreference } from '../../state/useUnitPreference';
@@ -71,29 +71,33 @@ export function StatsPanel({ shots, activeClub, profileId, profileName, headerAc
   );
 
   const stats = useMemo(() => computeStats(filteredShots), [filteredShots]);
-  const swingStats = useMemo(() => computeSwingSpeedStats(filteredShots), [filteredShots]);
-  const isSwingSpeedSession = filteredShots.length > 0 && filteredShots.every(isSwingSpeedShot);
+  const speedSessionKind = useMemo(() => getSpeedSessionKind(filteredShots), [filteredShots]);
 
   const tiles: StatTile[] = useMemo(() => {
-    if (isSwingSpeedSession) {
+    if (speedSessionKind) {
+      const speedStats = computeSpeedStats(filteredShots, speedSessionKind);
       return [
-        { id: 'count', label: t('metric.swings'), value: String(swingStats.count) },
+        {
+          id: 'count',
+          label: speedSessionKind === 'pitch-speed' ? t('metric.pitches') : t('metric.swings'),
+          value: String(speedStats.count),
+        },
         {
           id: 'last',
           label: t('stats.last'),
-          value: formatSpeed(swingStats.last_speed_mph, unitSystem, 1),
+          value: formatSpeed(speedStats.last_speed_mph, unitSystem, 1),
           unit: speedUnit,
         },
         {
           id: 'best',
           label: t('metric.best'),
-          value: formatSpeed(swingStats.best_speed_mph, unitSystem, 1),
+          value: formatSpeed(speedStats.best_speed_mph, unitSystem, 1),
           unit: speedUnit,
         },
         {
           id: 'avg',
           label: t('metric.average'),
-          value: formatSpeed(swingStats.avg_speed_mph, unitSystem, 1),
+          value: formatSpeed(speedStats.avg_speed_mph, unitSystem, 1),
           unit: speedUnit,
         },
       ];
@@ -131,7 +135,7 @@ export function StatsPanel({ shots, activeClub, profileId, profileName, headerAc
         value: stats.avg_smash_factor === null ? '—' : stats.avg_smash_factor.toFixed(2),
       },
     ];
-  }, [isSwingSpeedSession, stats, swingStats, unitSystem, speedUnit, distanceUnit, t]);
+  }, [speedSessionKind, filteredShots, stats, unitSystem, speedUnit, distanceUnit, t]);
 
   const clubFilters = (
     <div className="stats-panel__chips" role="group" aria-label={t('stats.filterByClub')}>
