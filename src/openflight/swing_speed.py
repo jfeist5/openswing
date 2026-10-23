@@ -35,6 +35,10 @@ class SwingSpeedEvent:
 class SwingSpeedMonitor:
     """Monitor OPS243 speed readings and emit club-only swing speed reps."""
 
+    # Must match the direction filter sent by _configure_radar().
+    DIRECTION = Direction.OUTBOUND
+    MODE = "swing-speed"
+
     def __init__(
         self,
         port: Optional[str] = None,
@@ -75,10 +79,7 @@ class SwingSpeedMonitor:
         off to the rolling buffer. Training never captures a rolling buffer.
         """
         self.radar.connect()
-        self.radar.configure_for_swing_speed_training(
-            min_speed_mph=self.trigger_threshold_mph,
-            num_reports=self.num_reports,
-        )
+        self._configure_radar()
         logger.info(
             "[SWING_SPEED] Monitor ready (threshold=%.1f mph, max=%s, reports=%d, end_quiet=%.0fms)",
             self.trigger_threshold_mph,
@@ -87,6 +88,13 @@ class SwingSpeedMonitor:
             self.end_quiet_ms,
         )
         return True
+
+    def _configure_radar(self):
+        """Apply this mode's CW speed-reporting setup to the connected radar."""
+        self.radar.configure_for_swing_speed_training(
+            min_speed_mph=self.trigger_threshold_mph,
+            num_reports=self.num_reports,
+        )
 
     def disconnect(self):
         """Disconnect from the radar."""
@@ -181,12 +189,7 @@ class SwingSpeedMonitor:
                 if reading and self._live_callback:
                     self._live_callback(reading)
 
-                qualifies = (
-                    reading is not None
-                    and reading.direction == Direction.OUTBOUND
-                    and reading.speed >= self.trigger_threshold_mph
-                    and self._within_max_speed(reading.speed)
-                )
+                qualifies = self._reading_qualifies(reading)
 
                 if now < cooldown_until:
                     time.sleep(self.poll_interval_ms / 1000.0)
@@ -241,18 +244,20 @@ class SwingSpeedMonitor:
                 time.sleep(1.0)
 
     def _select_swing_reading(self, readings: List[SpeedReading]) -> Optional[SpeedReading]:
-        """Select the fastest outbound candidate for swing speed training."""
-        outbound = [
-            reading
-            for reading in readings
-            if reading
-            and reading.direction == Direction.OUTBOUND
+        """Select the fastest qualifying candidate for this mode's direction."""
+        qualifying = [reading for reading in readings if self._reading_qualifies(reading)]
+        if not qualifying:
+            return None
+        return max(qualifying, key=lambda reading: reading.speed)
+
+    def _reading_qualifies(self, reading: Optional[SpeedReading]) -> bool:
+        """Return true for a reading in this mode's direction and speed window."""
+        return (
+            reading is not None
+            and reading.direction == self.DIRECTION
             and reading.speed >= self.trigger_threshold_mph
             and self._within_max_speed(reading.speed)
-        ]
-        if not outbound:
-            return None
-        return max(outbound, key=lambda reading: reading.speed)
+        )
 
     def _within_max_speed(self, speed_mph: float) -> bool:
         """Return true when a speed is below the configured plausible ceiling."""
@@ -281,4 +286,5 @@ class SwingSpeedMonitor:
             training_implement=self.training_implement,
             training_implement_label=self.training_implement_label,
             unit=peak.unit,
+            mode=self.MODE,
         )
