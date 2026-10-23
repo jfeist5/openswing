@@ -4,10 +4,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+This is my personal fork of OpenFlight for softball, called openswing (hitting exit velocity and pitch speed). Golf support should keep working. I’m new to this codebase, so explain changes before making them and keep them small.
+
 OpenFlight is a DIY golf launch monitor using the OPS243-A Doppler radar and K-LD7 angle radars (deprecated — superseded by a more capable radar chip; K-LD7 support is kept for existing builds only). It measures ball speed, club speed, launch angle, club path, spin rate, and carry distance.
+
+The Python package is `openflight` (`src/openflight/`), even though the checkout directory may be named differently. It runs on a Raspberry Pi; macOS is the other supported dev platform. `[tool.uv] environments` in `pyproject.toml` excludes Windows, so `uv sync`/`uv run` will not resolve on a Windows host.
+
+## Softball Fork (openswing)
+
+**Scope:** fastpitch softball only (43 ft pitching distance). Slowpitch is out of scope.
+
+**Hardware owned:** Raspberry Pi 5 (8 GB), OPS243-A, IWR6843 (TI IWR6843LEVM), two K-LD7s, SEN-14262 sound sensor, 7" touchscreen.
+
+**Mount (same as a Full Swing KIT):** about 10 ft behind home plate, centered, about 8 ft high, looking toward the pitcher. From there, pitches are **inbound** (negative FFT frequencies, OPS `R+`) and batted balls are **outbound**.
+
+**Constraints:**
+- Golf mode must keep working.
+- Never delete code. That includes sim forwarding, carry/ballistics, spin, and launch angle. Hide features that don't apply in a softball mode instead.
+- Keep all IWR6843 and K-LD7 angle-radar code. The IWR6843 (possibly also the K-LD7s) is the planned launch-angle source.
+
+**Goals by mode:**
+
+| Mode | Metrics | Status |
+|---|---|---|
+| Pitching | Pitch speed (first priority), spin rate | Pitch speed in progress. Spin later. |
+| Hitting | Exit velocity, launch angle, carry | Later. Includes a view showing ball flight on a softball field. |
+
+- **Pitch-speed mode:** hide the club picker and golf sim forwarding. Swing-speed mode is the precedent:
+  - `swing_speed.py` streams OPS CW speed reports and takes the peak of each event, like a radar gun. It never uses the rolling buffer.
+  - `on_swing_speed_detected` in `server.py` never calls the sim connectors.
+  - The UI swaps the club picker via `isSwingSpeedMode` in `ui/src/App.tsx`.
+- **Pitch-speed design decisions (agreed):**
+  1. Generalize the swing-speed monitor with direction and mode settings. `PitchSpeedMonitor` is a thin subclass, so the server's existing `isinstance(SwingSpeedMonitor)` checks keep working. Tests must pin swing-speed behavior unchanged.
+  2. Add a separate `configure_for_pitch_speed` in `ops243.py`: inbound only (`R+`) and a finer FFT than swing-speed's 256-point (~1.6 mph per bin). Steps shared with the swing-speed setup move into one private helper. Each mode keeps its own setup so tuning one can't change another.
+  3. In the UI, a single mode-to-features helper decides what each mode shows (club picker, simulate-button label, etc.). It replaces the scattered `isSwingSpeedMode` checks.
+- **Pitch spin:** needs two changes.
+  - A retuned RPM range. The processor searches only 2,000–12,000 RPM (`SPIN_MIN/MAX_SEAM_HZ`) and uses golf spin priors.
+  - A different capture trigger. The 4096-sample rolling buffer holds about 136 ms at 30 ksps, a pitch flies for about 0.5 s, and a glove-pop sound trigger fires only at the end of the flight.
+- **Carry:** keep the model, but make ball size, mass, and drag configurable. `ballistics.py` hard-codes a USGA golf ball (`BALL_MASS_KG`, `BALL_RADIUS_M`).
+- **Hitting launch angle:** planned from the IWR6843 with the softball mount geometry.
+
+**Geometry consequences** (estimates from the mount above; verify on hardware):
+- **Pitch near release:** the release point is about 48–50 ft from the radar and about 6 ft below it, so the line-of-sight angle is about 7°. The radial reading is less than 1% low.
+- **Pitch at the plate:** the angle is about 30°, so the reading is about 13% low. The peak radial reading therefore occurs near release, which is the conventional pitch speed. Aim the OPS beam at the release point, not at the plate.
+- **Batted ball at contact:** the line of sight slopes about 25–30° *downward* while the ball rises, so early radial readings can be 25%+ below true exit velocity. They only approach it about 20–30 ft out, past the ~68 ms of post-trigger buffer at the default `S#16`. Exit velocity will need launch-angle-based correction, a different pre/post-trigger split, or both.
+  - `speed_correction.py` models only the golf geometry: radar below and behind a tee, vertical angle only.
+- **Golf-tuned assumptions** that won't transfer to softball as-is:
+  - **IWR6843:** the validated mount is about 6 in off the floor, tilted up about 10°, about 1.4 m from the tee, with a net about 4 m away. LCMF-v1 constants are frozen; changing them requires a new estimator version and validation.
+  - **K-LD7:** the geometry assumes the ball about 4 in below the radar, launch angles of 0–45°, and at most 150 ms of flight (`kld7/geometry.py`).
+  - **K-LD7 and OPS243 interference:** both run at 24 GHz and can interfere. The IWR6843 runs at 60 GHz.
 
 ## Development Rules
 
+- **Read `AGENTS.md` (and `ui/AGENTS.md` for UI work) — its rules are mandatory.** It covers change scope, validation, and the PR rules that CI enforces in `.github/workflows/anti-slop.yml` and `pr-checks.yml`: conventional PR titles, ≤50 files / ≤2,000 changed lines, ≤25 added comment lines, a trailing newline on every file, and the PR template filled in. Never describe mock or simulated runs as hardware validation.
 - **Always use `uv` for Python commands.** Use `uv run` to execute Python tools (pytest, pylint, ruff, etc.). Never use bare `python`, `pip`, `pytest`, etc.
 - **Update `pyproject.toml` when adding dependencies.** If new Python packages are introduced, add them to the appropriate dependency list in `pyproject.toml`.
 - **Bug reports: write a failing test first.** When the user reports a bug, write a test that reproduces and confirms the bug before investigating or fixing it.
@@ -114,10 +163,18 @@ uv run ruff format --check src/openflight/
 Kiosk / touch conventions for agents: see `ui/AGENTS.md`.
 
 ```bash
-npm run dev      # Development server with hot reload
-npm run build    # Production build
-npm run lint     # ESLint
+npm run dev           # Vite dev server with hot reload
+npm run dev:mock      # Vite + mock WebSocket server (ui/mock-server/), no backend needed
+npm run build         # Production build (tsc -b && vite build)
+npm run lint          # ESLint
+npm run format:check  # Prettier check (enforced in CI)
+npm test              # Vitest unit tests
+npm run test:e2e      # Playwright E2E (kiosk sizes 800×400, 800×480, 1024×600)
 ```
+
+### Makefile shortcuts and docs
+
+`make install` (uv sync --group dev + npm install), `make test`, `make lint` (ruff + pylint + ESLint), `make format`, `make dev` (mock mode), `make hooks` (pre-commit: ruff, pylint, eslint). Docs: `make docs` (zensical live server) and `make docs-build` (strict build that fails on broken internal links; `tests/test_doc_references.py` also checks doc references).
 
 ### Radar Setup (One-Time)
 
@@ -137,6 +194,10 @@ uv run python scripts/hardware-test/test_rolling_buffer_persist.py --test
 scripts/start-kiosk.sh              # Default: rolling buffer + sound trigger
 scripts/start-kiosk.sh --mock       # Development mode without hardware
 scripts/start-kiosk.sh --kld7                          # With K-LD7 angle radars (deprecated; auto-detects horizontal)
+scripts/start-kiosk.sh --swing-speed  # Swing speed training (air swings, no sound trigger)
+scripts/start-kiosk.sh --iwr6843 --ops-port /dev/ttyAMA0 \
+  --iwr6843-tee-m <m> --iwr6843-net-m <m> --iwr6843-tilt-deg <deg> \
+  --iwr6843-radar-height-m <m> --iwr6843-ball-height-m <m>   # IWR6843 angle radar; geometry must be measured per rig
 ```
 
 ### Sound Trigger Testing
@@ -172,6 +233,7 @@ React UI (WebSocket) ──► Flask Server ──► RollingBufferMonitor ─�
 3. **RollingBufferProcessor** (`rolling_buffer/processor.py`) runs FFT + mode-based speed extraction
 4. Creates `Shot` object with ball_speed, club_speed, spin, carry
 5. **IWR6843** (or legacy **KLD7Trackers**) extracts launch angle and club path from radar measurements
+   - When an angle radar is enabled, `server.py` then applies a cosine correction to ball speed (`speed_correction.py`), because the OPS243 reads only the radial component. The raw value is kept in `ball_speed_raw_mph`. Ordering matters: the angle radars anchor to the *raw* speed, and calculated spin and carry use the *corrected* speed.
 6. **Ballistics engine** (`ballistics.py`) computes trajectory and carry distance
 7. **Flask server** (`server.py`) emits WebSocket "shot" event and forwards to connected simulator software
 8. **React UI** (`ui/src/`) renders shot data
@@ -195,6 +257,11 @@ React UI (WebSocket) ──► Flask Server ──► RollingBufferMonitor ─�
 ### Processing Mode
 
 **Rolling Buffer** is the default and only production mode. The OPS243-A continuously buffers I/Q data. When the sound trigger fires, the buffer is dumped and analyzed for ball speed, club speed, and spin rate. IWR6843 or legacy K-LD7 data is correlated via the OPS243 impact timestamp.
+
+Inside `RollingBufferProcessor.process_capture`, one FFT pass at a 32-sample step yields two timelines: a non-overlapping 128-step timeline (~234 Hz) and the full overlapping one (~937 Hz).
+- **Ball speed** comes from the non-overlapping timeline. It is the fastest 1-mph bucket that repeats in at least two windows, *not* the max, so single-window noise spikes are rejected.
+- **Club speed, impact time, and spin** use the overlapping timeline.
+- **FFT direction:** positive frequencies are outbound (ball/club moving away from the radar) and negative frequencies are inbound.
 
 ## Key Constants
 
