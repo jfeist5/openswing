@@ -38,6 +38,8 @@ The Python package is `openflight` (`src/openflight/`), even though the checkout
   1. Generalize the swing-speed monitor with direction and mode settings. `PitchSpeedMonitor` is a thin subclass, so the server's existing `isinstance(SwingSpeedMonitor)` checks keep working. Tests must pin swing-speed behavior unchanged.
   2. Add a separate `configure_for_pitch_speed` in `ops243.py`: inbound only (`R+`) and a finer FFT than swing-speed's 256-point (~1.6 mph per bin). Steps shared with the swing-speed setup move into one private helper. Each mode keeps its own setup so tuning one can't change another.
   3. In the UI, a single mode-to-features helper decides what each mode shows (club picker, simulate-button label, etc.). It replaces the scattered `isSwingSpeedMode` checks.
+  4. Render pitch shots as pitches, not golf shots: Live tiles, Stats, Shots list, TV display, and CSV export (the `isSwingSpeedShot` checks). Add Playwright pitch-mode tests at all three kiosk sizes (800×400, 800×480, 1024×600). This needs a pitch-speed mode in the UI mock server (`ui/mock-server/`).
+- **Future: pitch-type picker.** Pick fastball, rise, drop, curve, screw, or change-up before a pitch, and tag each pitch with it so stats can be broken down by pitch type. Needs a server-side pitch-type list (like `TRAINING_IMPLEMENT_LABELS`) and a picker in pitch mode, which has none after step 3.
 - **Pitch spin:** needs two changes.
   - A retuned RPM range. The processor searches only 2,000–12,000 RPM (`SPIN_MIN/MAX_SEAM_HZ`) and uses golf spin priors.
   - A different capture trigger. The 4096-sample rolling buffer holds about 136 ms at 30 ksps, a pitch flies for about 0.5 s, and a glove-pop sound trigger fires only at the end of the flight.
