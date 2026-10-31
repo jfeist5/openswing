@@ -5090,6 +5090,11 @@ def main():
         ),
     )
     parser.add_argument(
+        "--pitch-diagnostics",
+        action="store_true",
+        help="Log the radar report behind every accepted pitch reading to the session log",
+    )
+    parser.add_argument(
         "--pitch-speed-min-magnitude",
         type=float,
         default=None,
@@ -5387,6 +5392,10 @@ def main():
         if args.pitch_speed_min_magnitude < 0:
             parser.error("--pitch-speed-min-magnitude must not be negative")
         pitch_speed_kwargs["min_magnitude"] = args.pitch_speed_min_magnitude
+    if args.pitch_diagnostics:
+        if not args.pitch_speed:
+            parser.error("--pitch-diagnostics requires --pitch-speed")
+        pitch_speed_kwargs["diagnostics"] = True
 
     if args.iwr6843 and args.kld7:
         parser.error("--iwr6843 and vertical --kld7 cannot both own launch angle")

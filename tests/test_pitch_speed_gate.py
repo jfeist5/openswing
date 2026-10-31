@@ -217,3 +217,79 @@ def test_recorded_away_move_does_not_register_a_pitch(monkeypatch, rep):
     reports = next(r for move, n, r in RECORDED if move == "AWAY" and n == rep)
 
     assert _replay(monkeypatch, reports) == []
+
+
+class _PolledReportRadar:
+    def __init__(self, reports):
+        self.reports = reports
+
+    def read_speed_reports_nonblocking(self):
+        reports, self.reports = self.reports, []
+        return reports
+
+
+class _FakeSessionLogger:
+    def __init__(self, fail=False):
+        self.reports = []
+        self.fail = fail
+
+    def log_pitch_report(self, report):
+        if self.fail:
+            raise OSError("disk full")
+        self.reports.append(report)
+
+
+def _poll(monkeypatch, monitor, reports, session):
+    monkeypatch.setattr("openflight.swing_speed.get_session_logger", lambda: session)
+    monitor.radar = _PolledReportRadar(reports)
+    return monitor._next_reading()  # pylint: disable=protected-access
+
+
+def test_diagnostics_are_off_by_default():
+    assert PitchSpeedMonitor().diagnostics is False
+
+
+def test_diagnostics_log_the_report_behind_each_accepted_reading(monkeypatch):
+    session = _FakeSessionLogger()
+    accepted = [_inbound(30.2, 287.0), _outbound(9.8, 140.0), _inbound(31.0, 20.0)]
+    rejected = [_outbound(14.7, 2071.0), _inbound(44.8, 239.0)]
+
+    reading = _poll(monkeypatch, _monitor(diagnostics=True), [rejected, accepted], session)
+
+    assert reading.speed == 30.2
+    assert session.reports == [
+        {
+            "selected": {"speed": 30.2, "dir": "inbound", "mag": 287.0},
+            "dominant": {"speed": 30.2, "dir": "inbound", "mag": 287.0},
+            "candidates": [
+                {"speed": 30.2, "dir": "inbound", "mag": 287.0},
+                {"speed": 9.8, "dir": "outbound", "mag": 140.0},
+                {"speed": 31.0, "dir": "inbound", "mag": 20.0},
+            ],
+        }
+    ]
+
+
+def test_diagnostics_off_logs_nothing(monkeypatch):
+    session = _FakeSessionLogger()
+
+    reading = _poll(monkeypatch, _monitor(), [[_inbound(30.2, 287.0)]], session)
+
+    assert reading.speed == 30.2
+    assert session.reports == []
+
+
+def test_diagnostics_without_a_session_logger_still_return_the_reading(monkeypatch):
+    reading = _poll(monkeypatch, _monitor(diagnostics=True), [[_inbound(30.2, 287.0)]], None)
+
+    assert reading.speed == 30.2
+
+
+def test_diagnostics_logging_failure_does_not_drop_the_reading(monkeypatch, caplog):
+    session = _FakeSessionLogger(fail=True)
+
+    with caplog.at_level("WARNING", logger="openflight.swing_speed"):
+        reading = _poll(monkeypatch, _monitor(diagnostics=True), [[_inbound(30.2, 287.0)]], session)
+
+    assert reading.speed == 30.2
+    assert "Failed to log pitch report" in caplog.text

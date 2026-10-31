@@ -204,6 +204,34 @@ class TestLogSpeedEvent:
         assert list(tmp_path.iterdir()) == []
 
 
+class TestLogPitchReport:
+    """Opt-in pitch diagnostics record the radar report behind each accepted reading."""
+
+    REPORT = {
+        "selected": {"speed": 30.2, "dir": "inbound", "mag": 287.0},
+        "dominant": {"speed": 30.2, "dir": "inbound", "mag": 287.0},
+        "candidates": [
+            {"speed": 30.2, "dir": "inbound", "mag": 287.0},
+            {"speed": 9.8, "dir": "outbound", "mag": 140.0},
+        ],
+    }
+
+    def test_writes_a_pitch_report_entry(self, tmp_path):
+        logger = SessionLogger(log_dir=tmp_path, enabled=True)
+        logger.start_session(mode="pitch-speed")
+
+        logger.log_pitch_report(dict(self.REPORT))
+
+        entry = json.loads(logger.session_path.read_text().strip().split("\n")[-1])
+        assert entry["type"] == "pitch_report"
+        assert {key: entry[key] for key in self.REPORT} == self.REPORT
+
+    def test_disabled_logger_writes_nothing(self, tmp_path):
+        SessionLogger(log_dir=tmp_path, enabled=False).log_pitch_report(dict(self.REPORT))
+
+        assert list(tmp_path.iterdir()) == []
+
+
 class TestLogShot:
     """Tests for shot logging."""
 

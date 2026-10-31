@@ -316,6 +316,13 @@ class SessionLogger:
         self._stats["speed_events"] += 1
         self._write_entry("speed_event", event)
 
+    def log_pitch_report(self, report: Dict[str, Any]):
+        """Log the radar report behind an accepted pitch reading (opt-in diagnostics)."""
+        if not self.enabled:
+            return
+
+        self._write_entry("pitch_report", report)
+
     def log_camera_capture(
         self,
         *,

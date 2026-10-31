@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Callable, List, Optional
 
 from .ops243 import Direction, OPS243Radar, SpeedReading
-from .session_logger import log_session_error
+from .session_logger import get_session_logger, log_session_error
 
 logger = logging.getLogger("openflight.swing_speed")
 
@@ -334,6 +334,7 @@ class PitchSpeedMonitor(SwingSpeedMonitor):
         trigger_threshold_mph: float = PITCH_TRIGGER_THRESHOLD_MPH,
         max_speed_mph: Optional[float] = PITCH_MAX_SPEED_MPH,
         min_magnitude: float = PITCH_MIN_MAGNITUDE,
+        diagnostics: bool = False,
         **kwargs,
     ):
         if min_magnitude < 0:
@@ -345,18 +346,20 @@ class PitchSpeedMonitor(SwingSpeedMonitor):
             **kwargs,
         )
         self.min_magnitude = min_magnitude
+        self.diagnostics = diagnostics
         self.training_implement = PITCH_IMPLEMENT
         self.training_implement_label = PITCH_IMPLEMENT_LABEL
 
     def _next_reading(self) -> Optional[SpeedReading]:
         """Gate each report separately, then keep the fastest accepted reading of this poll."""
-        accepted = [
-            reading
-            for reading in map(
-                self._select_report_reading, self.radar.read_speed_reports_nonblocking()
-            )
-            if reading is not None
-        ]
+        accepted = []
+        for report in self.radar.read_speed_reports_nonblocking():
+            reading = self._select_report_reading(report)
+            if reading is None:
+                continue
+            accepted.append(reading)
+            if self.diagnostics:
+                self._log_report(report, reading)
         if not accepted:
             return None
         return max(accepted, key=lambda reading: reading.speed)
@@ -383,6 +386,34 @@ class PitchSpeedMonitor(SwingSpeedMonitor):
         if not eligible:
             return None
         return max(eligible, key=lambda reading: reading.speed)
+
+    def _log_report(self, report: List[SpeedReading], selected: SpeedReading):
+        """Record why a report was accepted; a logging failure must not drop the reading."""
+
+        def describe(reading: SpeedReading) -> dict:
+            return {
+                "speed": round(reading.speed, 2),
+                "dir": reading.direction.value,
+                "mag": reading.magnitude,
+            }
+
+        session = get_session_logger()
+        if session is None:
+            return
+        dominant = max(
+            (reading for reading in report if reading.magnitude is not None),
+            key=lambda reading: reading.magnitude,
+        )
+        try:
+            session.log_pitch_report(
+                {
+                    "selected": describe(selected),
+                    "dominant": describe(dominant),
+                    "candidates": [describe(reading) for reading in report],
+                }
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("%s Failed to log pitch report: %s", self.LOG_TAG, exc)
 
     def _configure_radar(self):
         """Apply the pitch speed setup (both directions reported) to the connected radar."""

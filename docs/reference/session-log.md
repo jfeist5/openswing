@@ -42,6 +42,7 @@ Written by `src/openflight/session_logger.py`.
 | Type | Written when |
 | --- | --- |
 | `shot_detected` | A shot is measured. Ball speed, club speed, spin, angles, carry. |
+| `pitch_report` | With `--pitch-diagnostics`: the radar report behind each accepted pitch reading (`selected`, `dominant`, all `candidates`). |
 | `speed_event` | A swing-speed rep or pitch. `mode` (`swing-speed` or `pitch-speed`), peak speed, reading count, trigger speed, duration. Not uploaded by cloud sync. |
 
 ### Capture data
