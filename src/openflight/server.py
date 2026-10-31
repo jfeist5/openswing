@@ -74,6 +74,7 @@ from .swing_speed import (
     PITCH_IMPLEMENT,
     PITCH_IMPLEMENT_LABEL,
     PITCH_MAX_SPEED_MPH,
+    PITCH_MIN_MAGNITUDE,
     PITCH_TRIGGER_THRESHOLD_MPH,
     SwingSpeedEvent,
 )
@@ -5089,6 +5090,15 @@ def main():
         ),
     )
     parser.add_argument(
+        "--pitch-speed-min-magnitude",
+        type=float,
+        default=None,
+        help=(
+            "Noise floor for the strongest echo in a pitch report; weaker reports are ignored "
+            f"(default: {PITCH_MIN_MAGNITUDE:g}, from bench tests; tune at pitching distance)"
+        ),
+    )
+    parser.add_argument(
         "--sound-pre-trigger",
         type=int,
         default=16,
@@ -5371,6 +5381,12 @@ def main():
             pitch_speed_kwargs["trigger_threshold_mph"] = pitch_threshold
         if args.pitch_speed_max is not None:
             pitch_speed_kwargs["max_speed_mph"] = None if pitch_max == 0 else pitch_max
+    if args.pitch_speed_min_magnitude is not None:
+        if not args.pitch_speed:
+            parser.error("--pitch-speed-min-magnitude requires --pitch-speed")
+        if args.pitch_speed_min_magnitude < 0:
+            parser.error("--pitch-speed-min-magnitude must not be negative")
+        pitch_speed_kwargs["min_magnitude"] = args.pitch_speed_min_magnitude
 
     if args.iwr6843 and args.kld7:
         parser.error("--iwr6843 and vertical --kld7 cannot both own launch angle")

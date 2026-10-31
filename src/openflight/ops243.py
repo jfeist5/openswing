@@ -656,8 +656,7 @@ class OPS243Radar:
                 # mid-dump). Abandon the sync; the caller falls back to
                 # first-byte timing. Retrying writes would only re-block.
                 logger.warning(
-                    "[OPS] Clock sync C? write timed out — port jammed, "
-                    "abandoning clock sync"
+                    "[OPS] Clock sync C? write timed out — port jammed, abandoning clock sync"
                 )
                 return False
             buf = ""
@@ -2045,9 +2044,11 @@ class OPS243Radar:
         Shares the CW-only, no-flash setup of configure_for_swing_speed_training()
         but is its own entry point, so tuning one mode cannot change the other.
 
-        Pitches approach a radar mounted behind home plate, so this filters to
-        inbound only (R+). A pitch stays in the beam far longer than a ~100ms
-        swing, so it uses X=4 (512-point FFT, ~0.8 mph per bin) instead of X=2.
+        Pitches approach a radar mounted behind home plate, but this reports
+        both directions (R|): with inbound only (R+), faint ghosts of strong
+        outbound echoes come through as inbound, and the monitor needs the
+        outbound echo to reject them. A pitch stays in the beam far longer than
+        a ~100ms swing, so it uses X=4 (512-point FFT, ~0.8 mph per bin).
 
         Args:
             min_speed_mph: Ignore inbound reports below this speed (R>n).
@@ -2057,7 +2058,7 @@ class OPS243Radar:
         self._configure_cw_speed_stream(
             label="pitch speed",
             fft_size=4,
-            direction=Direction.INBOUND,
+            direction=None,
             min_speed_mph=min_speed_mph,
             num_reports=num_reports,
         )
@@ -2066,7 +2067,7 @@ class OPS243Radar:
         self,
         label: str,
         fft_size: int,
-        direction: Direction,
+        direction: Optional[Direction],
         min_speed_mph: float,
         num_reports: int,
     ):
@@ -2275,6 +2276,14 @@ class OPS243Radar:
 
     def read_speed_candidates_nonblocking(self) -> List[SpeedReading]:
         """Non-blocking speed read returning every candidate from complete lines."""
+        return [reading for report in self.read_speed_reports_nonblocking() for reading in report]
+
+    def read_speed_reports_nonblocking(self) -> List[List[SpeedReading]]:
+        """Non-blocking speed read returning each complete report's candidates as its own list.
+
+        One report is one output line; in JSON multi-object mode it holds up to
+        On candidates ordered by magnitude.
+        """
         if not self.serial or not self.serial.is_open:
             return []
 
@@ -2291,13 +2300,15 @@ class OPS243Radar:
             lines = self._speed_read_buffer.replace("\r\n", "\n").replace("\r", "\n").split("\n")
             self._speed_read_buffer = lines.pop()
 
-            readings: List[SpeedReading] = []
-            for candidate in lines:
-                candidate = candidate.strip()
-                if candidate:
-                    readings.extend(self._parse_readings(candidate))
+            reports: List[List[SpeedReading]] = []
+            for line in lines:
+                line = line.strip()
+                if line:
+                    report = self._parse_readings(line)
+                    if report:
+                        reports.append(report)
 
-            return readings
+            return reports
         except Exception:
             return []
 

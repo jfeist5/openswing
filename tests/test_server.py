@@ -2294,6 +2294,12 @@ class TestPitchSpeedMode:
             "max_speed_mph": None,
         }
 
+    def test_cli_pitch_speed_min_magnitude_override(self, run_cli):
+        """The noise floor for the pitch gate is tunable for real-distance testing."""
+        captured = run_cli("--mock-pitch-speed", "--pitch-speed-min-magnitude", "80")
+
+        assert captured["pitch_speed_kwargs"] == {"min_magnitude": 80.0}
+
     def test_cli_swing_speed_does_not_enable_pitch(self, run_cli):
         """Swing speed CLI behavior is unchanged by the pitch flags."""
         captured = run_cli("--mock-swing-speed")
@@ -2316,6 +2322,8 @@ class TestPitchSpeedMode:
             ("--mock-pitch-speed", "--pitch-speed-max", "25"),
             ("--mock-pitch-speed", "--pitch-speed-max", "-1"),
             ("--mock-pitch-speed", "--pitch-speed-threshold", "50", "--pitch-speed-max", "45"),
+            ("--pitch-speed-min-magnitude", "80"),
+            ("--mock-pitch-speed", "--pitch-speed-min-magnitude", "-1"),
         ],
     )
     def test_cli_rejects_invalid_pitch_speed_arguments(self, run_cli, arguments):

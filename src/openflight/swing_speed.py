@@ -18,6 +18,10 @@ PITCH_TRIGGER_THRESHOLD_MPH = 30.0
 PITCH_MAX_SPEED_MPH = 80.0
 PITCH_IMPLEMENT = "pitch"
 PITCH_IMPLEMENT_LABEL = "Pitch"
+# Pitch gate, from bench captures of hand moves on an OPS243-A (noise floor
+# about 20-28); validate against real tosses at pitching distance.
+PITCH_MIN_MAGNITUDE = 50.0
+PITCH_DOMINANT_FRACTION = 0.10
 
 
 @dataclass
@@ -189,12 +193,7 @@ class SwingSpeedMonitor:
         while self._running:
             try:
                 now = time.time()
-                readings = self.radar.read_speed_candidates_nonblocking()
-                if not readings:
-                    single_reading = self.radar.read_speed_nonblocking()
-                    readings = [single_reading] if single_reading else []
-
-                reading = self._select_swing_reading(readings)
+                reading = self._next_reading()
                 if reading and self._live_callback:
                     self._live_callback(reading)
 
@@ -260,6 +259,14 @@ class SwingSpeedMonitor:
                 )
                 time.sleep(1.0)
 
+    def _next_reading(self) -> Optional[SpeedReading]:
+        """Poll the radar once and return the reading that represents this poll, if any."""
+        readings = self.radar.read_speed_candidates_nonblocking()
+        if not readings:
+            single_reading = self.radar.read_speed_nonblocking()
+            readings = [single_reading] if single_reading else []
+        return self._select_swing_reading(readings)
+
     def _select_swing_reading(self, readings: List[SpeedReading]) -> Optional[SpeedReading]:
         """Select the fastest qualifying candidate for this mode's direction."""
         qualifying = [reading for reading in readings if self._reading_qualifies(reading)]
@@ -312,6 +319,8 @@ class PitchSpeedMonitor(SwingSpeedMonitor):
 
     Reuses the swing-speed capture loop: each pitch is reported at the peak
     inbound reading, like a radar gun, and never uses the rolling buffer.
+    Unlike swing speed, each radar report is gated by its strongest echo, so
+    ghosts of outbound motion and faint stray peaks cannot become pitches.
     """
 
     DIRECTION = Direction.INBOUND
@@ -324,19 +333,59 @@ class PitchSpeedMonitor(SwingSpeedMonitor):
         port: Optional[str] = None,
         trigger_threshold_mph: float = PITCH_TRIGGER_THRESHOLD_MPH,
         max_speed_mph: Optional[float] = PITCH_MAX_SPEED_MPH,
+        min_magnitude: float = PITCH_MIN_MAGNITUDE,
         **kwargs,
     ):
+        if min_magnitude < 0:
+            raise ValueError("min_magnitude must not be negative")
         super().__init__(
             port=port,
             trigger_threshold_mph=trigger_threshold_mph,
             max_speed_mph=max_speed_mph,
             **kwargs,
         )
+        self.min_magnitude = min_magnitude
         self.training_implement = PITCH_IMPLEMENT
         self.training_implement_label = PITCH_IMPLEMENT_LABEL
 
+    def _next_reading(self) -> Optional[SpeedReading]:
+        """Gate each report separately, then keep the fastest accepted reading of this poll."""
+        accepted = [
+            reading
+            for reading in map(
+                self._select_report_reading, self.radar.read_speed_reports_nonblocking()
+            )
+            if reading is not None
+        ]
+        if not accepted:
+            return None
+        return max(accepted, key=lambda reading: reading.speed)
+
+    def _select_report_reading(self, report: List[SpeedReading]) -> Optional[SpeedReading]:
+        """Pick a pitch reading from one radar report, or None if the report is not a pitch.
+
+        The strongest echo decides the report: it must be inbound and above the
+        noise floor. Then the fastest qualifying inbound candidate at least
+        PITCH_DOMINANT_FRACTION as strong as that echo wins.
+        """
+        candidates = [reading for reading in report if reading.magnitude is not None]
+        if not candidates:
+            return None
+        dominant = max(candidates, key=lambda reading: reading.magnitude)
+        if dominant.direction != Direction.INBOUND or dominant.magnitude < self.min_magnitude:
+            return None
+        floor = PITCH_DOMINANT_FRACTION * dominant.magnitude
+        eligible = [
+            reading
+            for reading in candidates
+            if reading.magnitude >= floor and self._reading_qualifies(reading)
+        ]
+        if not eligible:
+            return None
+        return max(eligible, key=lambda reading: reading.speed)
+
     def _configure_radar(self):
-        """Apply the inbound-only pitch speed setup to the connected radar."""
+        """Apply the pitch speed setup (both directions reported) to the connected radar."""
         self.radar.configure_for_pitch_speed(
             min_speed_mph=self.trigger_threshold_mph,
             num_reports=self.num_reports,

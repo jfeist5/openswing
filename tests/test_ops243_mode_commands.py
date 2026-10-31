@@ -196,7 +196,7 @@ def test_swing_speed_training_exact_command_sequence(monkeypatch, radar):
 
 
 def test_pitch_speed_exact_command_sequence(monkeypatch, radar):
-    """Pitch setup matches swing except a 512-point FFT (X=4) and inbound-only R+."""
+    """Pitch setup matches swing except a 512-point FFT (X=4) and both directions (R|)."""
     _record_with_sleeps(monkeypatch, radar)
 
     radar.configure_for_pitch_speed(min_speed_mph=30, num_reports=8)
@@ -209,7 +209,7 @@ def test_pitch_speed_exact_command_sequence(monkeypatch, radar):
         b"S=30", b"\r", ("sleep", 0.1),
         b"S(", ("sleep", 0.1),
         b"X=4", b"\r", ("sleep", 0.1),
-        b"R+", ("sleep", 0.05),
+        b"R|", ("sleep", 0.05),
         b"R>30", b"\r", ("sleep", 0.05),
         b"O8", ("sleep", 0.05),
         b"OJ",
@@ -219,14 +219,19 @@ def test_pitch_speed_exact_command_sequence(monkeypatch, radar):
     ]  # fmt: skip
 
 
-def test_pitch_speed_is_inbound_only(radar):
-    """Pitches approach the radar behind home plate; outbound must be filtered out."""
+def test_pitch_speed_reports_both_directions(radar):
+    """Inbound-only (R+) reports let faint ghosts of outbound motion through.
+
+    Bench captures on the OPS243-A showed away moves registering as 34-40 mph
+    pitches under R+; with R| the software can see the strong outbound echo
+    and reject the report.
+    """
     radar.configure_for_pitch_speed()
 
     sent = _sent(radar)
-    assert b"R+" in sent
+    assert b"R|" in sent
+    assert b"R+" not in sent
     assert b"R-" not in sent
-    assert b"R|" not in sent
 
 
 def test_pitch_speed_defaults_match_fastpitch_monitor(radar):
