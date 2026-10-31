@@ -290,6 +290,7 @@ Logs written to `~/openflight_sessions/session_*.jsonl` with entry types:
 - `session_start`, `session_end` - Session metadata
 - `reading_accepted` - Individual radar readings
 - `shot_detected` - Detected shots with metrics (ball_speed, club_speed, spin_rpm, carry_spin_adjusted)
+- `speed_event` - Swing-speed reps and pitches (`mode`, peak speed, reading count, trigger speed, duration)
 - `iq_reading` - I/Q streaming detections with SNR/CFAR data
 - `iq_blocks` - Raw I/Q data for post-session analysis
 - `trigger_event` - Trigger accept/reject with latency (for rolling buffer mode)

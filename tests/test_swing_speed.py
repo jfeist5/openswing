@@ -530,3 +530,35 @@ def test_capture_loop_pitch_ignores_slow_inbound_motion(monkeypatch):
     _, events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
 
     assert events == []
+
+
+def test_capture_loop_logs_pitch_wording_in_pitch_mode(monkeypatch, caplog):
+    """Pitch mode reuses the swing loop but must not log its events as swings."""
+    script = [[_inbound(41.0)], [_inbound(58.0)], [_inbound(62.0)]]
+
+    with caplog.at_level("INFO", logger="openflight.swing_speed"):
+        _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
+
+    assert "[PITCH_SPEED] Pitch started at 41.0 mph" in caplog.text
+    assert "[PITCH_SPEED] Pitch detected: peak=62.0 mph, readings=3" in caplog.text
+    assert "SWING" not in caplog.text
+    assert "Swing" not in caplog.text
+
+
+def test_capture_loop_logs_pitch_wording_for_ignored_motion(monkeypatch, caplog):
+    script = [[_inbound(31.0)], [_inbound(33.0)]]
+
+    with caplog.at_level("INFO", logger="openflight.swing_speed"):
+        _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
+
+    assert "[PITCH_SPEED] Ignored short motion: 2 readings, peak=33.0 mph" in caplog.text
+
+
+def test_capture_loop_keeps_swing_wording_in_swing_mode(monkeypatch, caplog):
+    script = [[_outbound(40.0)], [_outbound(70.0)], [_outbound(95.0)]]
+
+    with caplog.at_level("INFO", logger="openflight.swing_speed"):
+        _run_capture_loop(monkeypatch, script, trigger_threshold_mph=30.0)
+
+    assert "[SWING_SPEED] Swing started at 40.0 mph" in caplog.text
+    assert "[SWING_SPEED] Swing detected: peak=95.0 mph, readings=3" in caplog.text

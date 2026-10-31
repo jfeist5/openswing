@@ -155,6 +155,55 @@ class TestLogTriggerEvent:
         assert logger.stats["triggers_rejected"] == 2
 
 
+class TestLogSpeedEvent:
+    """Pitch and swing speed events get their own entry type, apart from golf shots."""
+
+    EVENT = {
+        "peak_speed_mph": 58.1,
+        "timestamp": "2026-10-31T14:18:26",
+        "duration_ms": 412,
+        "reading_count": 37,
+        "trigger_speed_mph": 31.2,
+        "peak_magnitude": 640.0,
+        "training_implement": "pitch",
+        "training_implement_label": "Pitch",
+        "profile_id": "p1",
+        "profile_name": "Justin",
+        "unit": "mph",
+        "mode": "pitch-speed",
+    }
+
+    def test_writes_a_speed_event_entry_with_the_event_payload(self, tmp_path):
+        logger = SessionLogger(log_dir=tmp_path, enabled=True)
+        logger.start_session(mode="pitch-speed")
+
+        logger.log_speed_event(dict(self.EVENT))
+
+        entry = json.loads(logger.session_path.read_text().strip().split("\n")[-1])
+        assert entry["type"] == "speed_event"
+        assert {key: entry[key] for key in self.EVENT} == self.EVENT
+        assert logger.stats["speed_events"] == 1
+        assert logger.stats["shots_detected"] == 0
+
+    def test_counts_each_speed_event(self, tmp_path):
+        logger = SessionLogger(log_dir=tmp_path, enabled=True)
+        logger.start_session(mode="swing-speed")
+
+        logger.log_speed_event({**self.EVENT, "mode": "swing-speed"})
+        logger.log_speed_event({**self.EVENT, "mode": "swing-speed"})
+
+        lines = logger.session_path.read_text().strip().split("\n")
+        assert [json.loads(line)["type"] for line in lines].count("speed_event") == 2
+        assert logger.stats["speed_events"] == 2
+
+    def test_disabled_logger_writes_nothing(self, tmp_path):
+        logger = SessionLogger(log_dir=tmp_path, enabled=False)
+
+        logger.log_speed_event(dict(self.EVENT))
+
+        assert list(tmp_path.iterdir()) == []
+
+
 class TestLogShot:
     """Tests for shot logging."""
 

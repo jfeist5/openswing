@@ -93,6 +93,7 @@ class SessionLogger:
         # Counters for session summary
         self._stats = {
             "shots_detected": 0,
+            "speed_events": 0,
             "errors": 0,
         }
 
@@ -306,6 +307,14 @@ class SessionLogger:
             data["pipeline_ms"] = pipeline_ms
 
         self._write_entry("shot_detected", data)
+
+    def log_speed_event(self, event: Dict[str, Any]):
+        """Log a swing or pitch speed event; its ``mode`` field says which."""
+        if not self.enabled:
+            return
+
+        self._stats["speed_events"] += 1
+        self._write_entry("speed_event", event)
 
     def log_camera_capture(
         self,

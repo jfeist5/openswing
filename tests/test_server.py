@@ -2825,6 +2825,90 @@ class TestShotProfileStamping:
         assert shot_payload["shot"]["profile_name"] == "David"
 
 
+class TestSpeedEventLogging:
+    """Speed events are recorded in the session log and logged with their own mode's wording."""
+
+    @staticmethod
+    def _pitch_event():
+        return SwingSpeedEvent(
+            peak_speed_mph=58.1,
+            timestamp=datetime(2026, 10, 31, 14, 18, 26),
+            duration_ms=412.0,
+            reading_count=37,
+            trigger_speed_mph=31.2,
+            training_implement="pitch",
+            training_implement_label="Pitch",
+            mode="pitch-speed",
+        )
+
+    @pytest.fixture(autouse=True)
+    def _quiet_emit(self, tmp_path, monkeypatch):
+        from openflight.profiles import ProfileStore
+
+        monkeypatch.setattr(
+            server_module, "profile_store", ProfileStore(tmp_path / "profiles.json")
+        )
+        monkeypatch.setattr(server_module.socketio, "emit", lambda *args, **kwargs: None)
+        monkeypatch.setattr(server_module, "monitor", None)
+
+    def test_records_the_event_in_the_session_log(self, monkeypatch):
+        logged = []
+        monkeypatch.setattr(
+            server_module,
+            "get_session_logger",
+            lambda: SimpleNamespace(log_speed_event=logged.append),
+        )
+
+        server_module.on_swing_speed_detected(self._pitch_event())
+
+        assert len(logged) == 1
+        assert logged[0]["mode"] == "pitch-speed"
+        assert logged[0]["peak_speed_mph"] == 58.1
+        assert logged[0]["reading_count"] == 37
+
+    def test_still_emits_when_session_logging_fails(self, monkeypatch):
+        emitted = []
+        monkeypatch.setattr(
+            server_module.socketio, "emit", lambda name, *args, **kwargs: emitted.append(name)
+        )
+
+        def broken(_event):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(
+            server_module, "get_session_logger", lambda: SimpleNamespace(log_speed_event=broken)
+        )
+        monkeypatch.setattr(server_module, "log_session_error", lambda *args, **kwargs: None)
+
+        server_module.on_swing_speed_detected(self._pitch_event())
+
+        assert emitted == ["swing_speed", "shot"]
+
+    def test_logs_pitch_wording_for_pitch_events(self, monkeypatch, caplog):
+        monkeypatch.setattr(server_module, "get_session_logger", lambda: None)
+
+        with caplog.at_level("INFO", logger="openflight.server"):
+            server_module.on_swing_speed_detected(self._pitch_event())
+
+        assert "Pitch speed event emitted: peak=58.1 mph, readings=37" in caplog.text
+        assert "Swing speed event emitted" not in caplog.text
+
+    def test_keeps_swing_wording_for_swing_events(self, monkeypatch, caplog):
+        monkeypatch.setattr(server_module, "get_session_logger", lambda: None)
+        swing = SwingSpeedEvent(
+            peak_speed_mph=101.4,
+            timestamp=datetime(2026, 10, 31, 14, 0, 0),
+            duration_ms=300.0,
+            reading_count=9,
+            trigger_speed_mph=40.0,
+        )
+
+        with caplog.at_level("INFO", logger="openflight.server"):
+            server_module.on_swing_speed_detected(swing)
+
+        assert "Swing speed event emitted: peak=101.4 mph, readings=9" in caplog.text
+
+
 class TestHandleClearSession:
     """Clear session removes only the active profile's rows, matched by id."""
 

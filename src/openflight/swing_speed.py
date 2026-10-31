@@ -44,6 +44,8 @@ class SwingSpeedMonitor:
     # Must match the direction filter sent by _configure_radar().
     DIRECTION = Direction.OUTBOUND
     MODE = "swing-speed"
+    LOG_TAG = "[SWING_SPEED]"
+    EVENT_NOUN = "Swing"
 
     def __init__(
         self,
@@ -87,7 +89,8 @@ class SwingSpeedMonitor:
         self.radar.connect()
         self._configure_radar()
         logger.info(
-            "[SWING_SPEED] Monitor ready (threshold=%.1f mph, max=%s, reports=%d, end_quiet=%.0fms)",
+            "%s Monitor ready (threshold=%.1f mph, max=%s, reports=%d, end_quiet=%.0fms)",
+            self.LOG_TAG,
             self.trigger_threshold_mph,
             "%.1f mph" % self.max_speed_mph if self.max_speed_mph is not None else "off",
             self.num_reports,
@@ -108,7 +111,7 @@ class SwingSpeedMonitor:
         try:
             self.radar.restore_rolling_buffer_mode()
         except Exception as exc:  # pylint: disable=broad-except
-            logger.warning("[SWING_SPEED] Failed to restore rolling buffer mode: %s", exc)
+            logger.warning("%s Failed to restore rolling buffer mode: %s", self.LOG_TAG, exc)
         self.radar.disconnect()
 
     def get_radar_info(self) -> dict:
@@ -126,7 +129,7 @@ class SwingSpeedMonitor:
         self._running = True
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
-        logger.info("[SWING_SPEED] Monitor started")
+        logger.info("%s Monitor started", self.LOG_TAG)
 
     def stop(self):
         """Stop monitoring."""
@@ -134,7 +137,7 @@ class SwingSpeedMonitor:
         if self._thread:
             self._thread.join(timeout=5.0)
             self._thread = None
-        logger.info("[SWING_SPEED] Monitor stopped")
+        logger.info("%s Monitor stopped", self.LOG_TAG)
 
     def get_events(self) -> List[SwingSpeedEvent]:
         """Return a copy of recorded swing speed events."""
@@ -205,7 +208,12 @@ class SwingSpeedMonitor:
                     if not active_readings:
                         swing_start = reading.timestamp or now
                         trigger_speed = reading.speed
-                        logger.info("[SWING_SPEED] Swing started at %.1f mph", trigger_speed)
+                        logger.info(
+                            "%s %s started at %.1f mph",
+                            self.LOG_TAG,
+                            self.EVENT_NOUN,
+                            trigger_speed,
+                        )
                     active_readings.append(reading)
                     last_active = reading.timestamp or now
                 elif active_readings and (now - last_active) * 1000.0 >= self.end_quiet_ms:
@@ -213,7 +221,8 @@ class SwingSpeedMonitor:
                     strong_single_peak = peak_speed >= self.single_reading_peak_mph
                     if len(active_readings) < self.min_readings and not strong_single_peak:
                         logger.info(
-                            "[SWING_SPEED] Ignored short motion: %d readings, peak=%.1f mph",
+                            "%s Ignored short motion: %d readings, peak=%.1f mph",
+                            self.LOG_TAG,
                             len(active_readings),
                             peak_speed,
                         )
@@ -229,7 +238,9 @@ class SwingSpeedMonitor:
                     )
                     self._events.append(event)
                     logger.info(
-                        "[SWING_SPEED] Swing detected: peak=%.1f mph, readings=%d",
+                        "%s %s detected: peak=%.1f mph, readings=%d",
+                        self.LOG_TAG,
+                        self.EVENT_NOUN,
                         event.peak_speed_mph,
                         event.reading_count,
                     )
@@ -241,9 +252,9 @@ class SwingSpeedMonitor:
 
                 time.sleep(self.poll_interval_ms / 1000.0)
             except Exception as exc:  # pylint: disable=broad-except
-                logger.error("[SWING_SPEED] Capture loop error: %s", exc, exc_info=True)
+                logger.error("%s Capture loop error: %s", self.LOG_TAG, exc, exc_info=True)
                 log_session_error(
-                    "Swing speed capture loop error",
+                    f"{self.EVENT_NOUN} speed capture loop error",
                     component="swing_speed_monitor",
                     exc=exc,
                 )
@@ -305,6 +316,8 @@ class PitchSpeedMonitor(SwingSpeedMonitor):
 
     DIRECTION = Direction.INBOUND
     MODE = "pitch-speed"
+    LOG_TAG = "[PITCH_SPEED]"
+    EVENT_NOUN = "Pitch"
 
     def __init__(
         self,

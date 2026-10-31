@@ -4093,10 +4093,23 @@ def on_swing_speed_detected(event: SwingSpeedEvent):
     event_data = swing_speed_to_dict(event)
     shot_data = swing_speed_to_shot_dict(event)
     stats = monitor.get_session_stats() if monitor else {}
+    try:
+        session_log = get_session_logger()
+        if session_log:
+            session_log.log_speed_event(event_data)
+    except Exception as e:  # pylint: disable=broad-except
+        logger.warning("[SERVER] Failed to log speed event: %s", e, exc_info=True)
+        log_session_error(
+            "Session speed event logging failed",
+            component="server",
+            context={"stage": "session_log_speed_event", "mode": event.mode},
+            exc=e,
+        )
     socketio.emit("swing_speed", {"event": event_data, "stats": stats})
     socketio.emit("shot", {"shot": shot_data, "stats": stats})
     logger.info(
-        "[SERVER] Swing speed event emitted: peak=%.1f mph, readings=%d",
+        "[SERVER] %s speed event emitted: peak=%.1f mph, readings=%d",
+        "Pitch" if event.mode == "pitch-speed" else "Swing",
         event.peak_speed_mph,
         event.reading_count,
     )
