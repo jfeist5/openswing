@@ -2300,6 +2300,12 @@ class TestPitchSpeedMode:
 
         assert captured["pitch_speed_kwargs"] == {"min_magnitude": 80.0}
 
+    def test_cli_pitch_speed_min_readings_override(self, run_cli):
+        """Short flights at close range can yield only two readings; this is tunable on site."""
+        captured = run_cli("--mock-pitch-speed", "--pitch-speed-min-readings", "2")
+
+        assert captured["pitch_speed_kwargs"] == {"min_readings": 2}
+
     def test_cli_pitch_diagnostics_flag(self, run_cli):
         captured = run_cli("--mock-pitch-speed", "--pitch-diagnostics")
 
@@ -2330,6 +2336,9 @@ class TestPitchSpeedMode:
             ("--pitch-speed-min-magnitude", "80"),
             ("--mock-pitch-speed", "--pitch-speed-min-magnitude", "-1"),
             ("--mock", "--pitch-diagnostics"),
+            ("--pitch-speed-min-readings", "2"),
+            ("--mock-pitch-speed", "--pitch-speed-min-readings", "0"),
+            ("--mock-pitch-speed", "--pitch-speed-min-readings", "-1"),
         ],
     )
     def test_cli_rejects_invalid_pitch_speed_arguments(self, run_cli, arguments):

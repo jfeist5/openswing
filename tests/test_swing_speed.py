@@ -602,3 +602,17 @@ def test_capture_loop_keeps_swing_wording_in_swing_mode(monkeypatch, caplog):
 
     assert "[SWING_SPEED] Swing started at 40.0 mph" in caplog.text
     assert "[SWING_SPEED] Swing detected: peak=95.0 mph, readings=3" in caplog.text
+
+
+def test_pitch_min_readings_setting_counts_a_two_reading_pitch(monkeypatch):
+    """With min_readings=2, a short real flight (two accepted readings) registers."""
+    script = [_strong_inbound_echo(38.4), _strong_inbound_echo(37.5)]
+
+    _, default_events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
+    script = [_strong_inbound_echo(38.4), _strong_inbound_echo(37.5)]
+    _, events = _run_capture_loop(
+        monkeypatch, script, monitor_cls=PitchSpeedMonitor, min_readings=2
+    )
+
+    assert default_events == []
+    assert [event.peak_speed_mph for event in events] == [38.4]
