@@ -206,6 +206,14 @@ def _strong_outbound(speed):
     return SpeedReading(speed=speed, direction=Direction.OUTBOUND, magnitude=500.0)
 
 
+def _strong_inbound_echo(speed):
+    """A two-step inbound echo peaking at ``speed``, as one report of a moving object."""
+    return [
+        _strong_inbound(speed),
+        SpeedReading(speed=speed + 0.82, direction=Direction.INBOUND, magnitude=400.0),
+    ]
+
+
 def test_select_swing_reading_ignores_inbound_candidates():
     """Inbound returns (e.g. the backswing) must never become the swing reading."""
     monitor = SwingSpeedMonitor(trigger_threshold_mph=30.0)
@@ -520,10 +528,10 @@ def test_pitch_speed_disconnect_restores_rolling_buffer_mode(monkeypatch):
 def test_capture_loop_emits_pitch_event_for_inbound_pitch(monkeypatch):
     """An inbound pitch becomes one pitch-speed event at its peak radial speed."""
     script = [
-        [_strong_inbound(41.0)],
-        [_strong_inbound(58.0)],
-        [_strong_inbound(62.0)],
-        [_strong_inbound(61.0)],
+        _strong_inbound_echo(41.0),
+        _strong_inbound_echo(58.0),
+        _strong_inbound_echo(62.0),
+        _strong_inbound_echo(61.0),
     ]
 
     _, events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
@@ -548,7 +556,7 @@ def test_capture_loop_pitch_ignores_outbound_motion(monkeypatch):
 
 def test_capture_loop_pitch_rejects_speeds_above_fastpitch_max(monkeypatch):
     """Inbound readings above the 80 mph ceiling are treated as implausible."""
-    script = [[_strong_inbound(95.0)], [_strong_inbound(97.0)], [_strong_inbound(96.0)]]
+    script = [_strong_inbound_echo(95.0), _strong_inbound_echo(97.0), _strong_inbound_echo(96.0)]
 
     _, events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
 
@@ -557,7 +565,7 @@ def test_capture_loop_pitch_rejects_speeds_above_fastpitch_max(monkeypatch):
 
 def test_capture_loop_pitch_ignores_slow_inbound_motion(monkeypatch):
     """The pitcher's stride and other slow inbound motion stays below the trigger."""
-    script = [[_strong_inbound(12.0)], [_strong_inbound(18.0)], [_strong_inbound(29.9)]]
+    script = [_strong_inbound_echo(12.0), _strong_inbound_echo(18.0), _strong_inbound_echo(29.9)]
 
     _, events = _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
 
@@ -566,7 +574,7 @@ def test_capture_loop_pitch_ignores_slow_inbound_motion(monkeypatch):
 
 def test_capture_loop_logs_pitch_wording_in_pitch_mode(monkeypatch, caplog):
     """Pitch mode reuses the swing loop but must not log its events as swings."""
-    script = [[_strong_inbound(41.0)], [_strong_inbound(58.0)], [_strong_inbound(62.0)]]
+    script = [_strong_inbound_echo(41.0), _strong_inbound_echo(58.0), _strong_inbound_echo(62.0)]
 
     with caplog.at_level("INFO", logger="openflight.swing_speed"):
         _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)
@@ -578,7 +586,7 @@ def test_capture_loop_logs_pitch_wording_in_pitch_mode(monkeypatch, caplog):
 
 
 def test_capture_loop_logs_pitch_wording_for_ignored_motion(monkeypatch, caplog):
-    script = [[_strong_inbound(31.0)], [_strong_inbound(33.0)]]
+    script = [_strong_inbound_echo(31.0), _strong_inbound_echo(33.0)]
 
     with caplog.at_level("INFO", logger="openflight.swing_speed"):
         _run_capture_loop(monkeypatch, script, monitor_cls=PitchSpeedMonitor)

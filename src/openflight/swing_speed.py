@@ -22,6 +22,29 @@ PITCH_IMPLEMENT_LABEL = "Pitch"
 # about 20-28); validate against real tosses at pitching distance.
 PITCH_MIN_MAGNITUDE = 50.0
 PITCH_DOMINANT_FRACTION = 0.10
+# One moving object fills neighboring FFT steps (~0.82 mph apart at X=4);
+# steps further apart than this belong to different echoes.
+PITCH_ECHO_GAP_MPH = 1.2
+PITCH_MIN_ECHO_STEPS = 2
+
+
+def group_echoes(readings: List[SpeedReading]) -> List[List[SpeedReading]]:
+    """Group same-direction readings into echoes of neighboring speed steps, slowest first."""
+    echoes: List[List[SpeedReading]] = []
+    for direction in (Direction.INBOUND, Direction.OUTBOUND):
+        steps = sorted(
+            (reading for reading in readings if reading.direction == direction),
+            key=lambda reading: reading.speed,
+        )
+        echo: List[SpeedReading] = []
+        for step in steps:
+            if echo and step.speed - echo[-1].speed > PITCH_ECHO_GAP_MPH:
+                echoes.append(echo)
+                echo = []
+            echo.append(step)
+        if echo:
+            echoes.append(echo)
+    return echoes
 
 
 @dataclass
@@ -368,8 +391,11 @@ class PitchSpeedMonitor(SwingSpeedMonitor):
         """Pick a pitch reading from one radar report, or None if the report is not a pitch.
 
         The strongest echo decides the report: it must be inbound and above the
-        noise floor. Then the fastest qualifying inbound candidate at least
-        PITCH_DOMINANT_FRACTION as strong as that echo wins.
+        noise floor. Candidates are grouped into echoes of neighboring steps, and
+        each echo is read at its strongest step, not its faint top edge. The
+        fastest qualifying inbound echo spanning at least PITCH_MIN_ECHO_STEPS
+        and at least PITCH_DOMINANT_FRACTION as strong as the strongest echo
+        wins, so a faint fast ball still beats a strong slow body.
         """
         candidates = [reading for reading in report if reading.magnitude is not None]
         if not candidates:
@@ -378,10 +404,13 @@ class PitchSpeedMonitor(SwingSpeedMonitor):
         if dominant.direction != Direction.INBOUND or dominant.magnitude < self.min_magnitude:
             return None
         floor = PITCH_DOMINANT_FRACTION * dominant.magnitude
+        peaks = [
+            max(echo, key=lambda reading: reading.magnitude)
+            for echo in group_echoes(candidates)
+            if len(echo) >= PITCH_MIN_ECHO_STEPS
+        ]
         eligible = [
-            reading
-            for reading in candidates
-            if reading.magnitude >= floor and self._reading_qualifies(reading)
+            peak for peak in peaks if peak.magnitude >= floor and self._reading_qualifies(peak)
         ]
         if not eligible:
             return None
