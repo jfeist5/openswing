@@ -99,6 +99,11 @@ for (const viewport of KIOSK_VIEWPORTS) {
       await expect(page.locator('.shots-panel__row')).toHaveCount(2);
       await expect(page.locator('.shots-panel__columns')).toContainText('Speed');
       await expect(page.locator('.shots-panel__columns')).not.toContainText('Carry');
+
+      await page.locator('.shots-panel__row-main').first().click();
+      const devices = page.locator('.shots-panel__field select option');
+      await expect(devices).toContainText(['Pocket Radar', 'Stalker', 'Other']);
+      await expect(page.locator('.shots-panel__field select option', { hasText: 'TrackMan' })).toHaveCount(0);
     });
   });
 }

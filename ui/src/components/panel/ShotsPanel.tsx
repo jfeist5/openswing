@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Shot } from '../../types/shot';
+import { comparatorDevicesFor } from '../../data/comparatorDevices';
 import {
   filterShotsByProfile,
   getPeakSpeedMph,
@@ -29,8 +30,6 @@ interface ShotsPanelProps {
   onDeleteShot: (timestamp: string) => void;
   onReplayShot?: (shot: Shot) => void;
 }
-
-const COMPARATOR_DEVICES = ['Stack Radar', 'PRGR', 'TrackMan', 'Full Swing', 'Other'];
 
 function optionalNumber(value: number | null | undefined, digits = 1, signed = false): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
@@ -82,7 +81,7 @@ function ValidationEditor({
           onChange={(event) => onUpdate(shot.timestamp, { comparatorDevice: event.target.value })}
         >
           <option value="">{t('shots.device')}</option>
-          {COMPARATOR_DEVICES.map((device) => (
+          {comparatorDevicesFor(shot, entry.comparatorDevice).map((device) => (
             <option key={device} value={device}>
               {device}
             </option>
