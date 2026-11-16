@@ -208,7 +208,12 @@ class TestCheckOps243RollingBufferPersisted:
         result = diagnose.check_ops243_rolling_buffer_persisted(state)
         assert result.status == "skip"
 
-    def test_pass_when_no_data_streams(self):
+    def test_silence_is_inconclusive_not_a_pass(self):
+        """A factory (CW) radar is also silent when nothing moves in front of it.
+
+        On the Pi, an unconfigured OPS243 passed this check in a still room;
+        only the software-trigger capture (check 4) proves rolling-buffer mode.
+        """
         state = diagnose.DiagnosticState()
         mock_radar = MagicMock()
         mock_radar.serial.in_waiting = 0
@@ -217,8 +222,9 @@ class TestCheckOps243RollingBufferPersisted:
 
         result = diagnose.check_ops243_rolling_buffer_persisted(state)
 
-        assert result.status == "pass"
-        assert "rolling buffer" in result.detail.lower()
+        assert result.status == "skip"
+        assert "inconclusive" in result.detail.lower()
+        assert "software trigger" in result.detail.lower()
 
     def test_fail_when_data_streams(self):
         state = diagnose.DiagnosticState()

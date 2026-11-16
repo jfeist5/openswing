@@ -296,11 +296,12 @@ def check_ops243_connectivity(state: DiagnosticState) -> CheckResult:
 def check_ops243_rolling_buffer_persisted(state: DiagnosticState) -> CheckResult:
     """Check 2 — verify radar boots in rolling buffer mode.
 
-    In standard (CW) mode, the OPS243 streams speed readings continuously.
-    In rolling buffer mode, the serial port is silent until triggered.
-    We clear any stale data then sample for 500ms — if bytes arrive,
-    the radar is in CW mode and the persistence workaround hasn't been
-    applied.
+    In rolling buffer mode, the serial port is silent until triggered. In
+    standard (CW) mode the OPS243 reports speeds, but only while something
+    moves in front of it. We clear any stale data then sample for 500ms: if
+    bytes arrive, the radar is in CW mode and the persistence workaround
+    hasn't been applied. Silence cannot tell the two apart in a still room,
+    so it is reported as inconclusive; the software-trigger check confirms.
     """
     start = time.time()
     if state.ops243_radar is None:
@@ -336,8 +337,11 @@ def check_ops243_rolling_buffer_persisted(state: DiagnosticState) -> CheckResult
 
     return CheckResult(
         name="OPS243 rolling buffer persisted",
-        status="pass",
-        detail="Radar boots in rolling buffer mode (silent serial)",
+        status="skip",
+        detail=(
+            "Inconclusive: no data in 0.5s, which also happens in CW mode when nothing moves; "
+            "the software trigger check confirms rolling buffer mode"
+        ),
         elapsed_s=time.time() - start,
     )
 
