@@ -236,3 +236,109 @@ def test_main_setup_uses_the_terminal_free_launcher_installer():
     setup_script = (REPO_ROOT / "scripts/setup/setup.sh").read_text(encoding="utf-8")
 
     assert '"$SCRIPT_DIR/install_desktop_launcher.sh"' in setup_script
+
+
+def _install(tmp_path, *args, checkout=None, stdin=None):
+    """Run the installer as if from REPO_ROOT (or a copied checkout) with a temp HOME."""
+    if checkout is None:
+        installer, cwd = INSTALLER, REPO_ROOT
+    else:
+        setup_dir = tmp_path / checkout / "scripts/setup"
+        setup_dir.mkdir(parents=True)
+        shutil.copy(INSTALLER, setup_dir)
+        shutil.copy(EXAMPLE_LAUNCHER, setup_dir)
+        installer, cwd = setup_dir / INSTALLER.name, tmp_path / checkout
+    home = tmp_path / "home"
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "OPENFLIGHT_DESKTOP_DIR": str(home / "Desktop"),
+        "OPENFLIGHT_SKIP_DESKTOP_TRUST": "true",
+    }
+    result = subprocess.run(
+        ["bash", str(installer), *args],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        input=stdin,
+        check=False,
+    )
+    return home, result
+
+
+def test_pitch_option_installs_a_separate_pitch_launcher(tmp_path):
+    home, result = _install(tmp_path, "--pitch", checkout="openswing")
+
+    assert result.returncode == 0, result.stderr
+    entry = (home / "Desktop" / "OpenFlight-openswing-pitch.desktop").read_text(encoding="utf-8")
+    wrapper = home / "run-openflight-openswing-pitch.sh"
+    assert "Name=OpenSwing Pitch\n" in entry
+    assert "Comment=Fastpitch pitch speed\n" in entry
+    assert f"Exec=/bin/bash -ilc {wrapper}\n" in entry
+    assert os.access(wrapper, os.X_OK)
+    assert not (home / "Desktop" / "OpenFlight-openswing.desktop").exists()
+    assert not (home / "run-openflight-openswing.sh").exists()
+
+
+def test_pitch_wrapper_adds_pitch_flags_right_after_the_splash_flag(tmp_path):
+    home, _ = _install(tmp_path, "--pitch", checkout="openswing")
+    wrapper = (home / "run-openflight-openswing-pitch.sh").read_text(encoding="utf-8")
+
+    subprocess.run(["bash", "-n", str(home / "run-openflight-openswing-pitch.sh")], check=True)
+    lines = [line.strip() for line in wrapper.splitlines()]
+    splash = lines.index("--startup-splash")
+    assert lines[splash + 1 : splash + 3] == ["--pitch-speed", "--pitch-diagnostics"]
+    assert wrapper.count("--pitch-speed\n") == 1
+
+
+def test_pitch_and_golf_launchers_share_one_lock(tmp_path):
+    """Two icons must not start two copies fighting over the radar."""
+    home, _ = _install(tmp_path, checkout="openswing")
+    _install(tmp_path, "--pitch", checkout="openswing-copy")
+    golf = (home / "run-openflight-openswing.sh").read_text(encoding="utf-8")
+    pitch = (home / "run-openflight-openswing-copy-pitch.sh").read_text(encoding="utf-8")
+
+    lock_line = 'lock_file="$runtime_dir/openflight-launch.lock"'
+    assert lock_line in golf
+    assert lock_line in pitch
+
+
+def test_pitch_install_leaves_an_existing_golf_launcher_untouched(tmp_path):
+    home, _ = _install(tmp_path, checkout="openswing")
+    golf_entry = home / "Desktop" / "OpenFlight-openswing.desktop"
+    golf_wrapper = home / "run-openflight-openswing.sh"
+    golf_wrapper.write_text("#!/bin/bash\n# local calibration\n", encoding="utf-8")
+    before = golf_entry.read_text(encoding="utf-8")
+    shutil.rmtree(tmp_path / "openswing")
+
+    _, result = _install(tmp_path, "--pitch", checkout="openswing")
+
+    assert result.returncode == 0, result.stderr
+    assert golf_entry.read_text(encoding="utf-8") == before
+    assert golf_wrapper.read_text(encoding="utf-8") == "#!/bin/bash\n# local calibration\n"
+
+
+@pytest.mark.parametrize(
+    ("checkout", "expected_name", "desktop_file"),
+    [
+        ("openflight", "OpenSwing Pitch", "OpenFlight-pitch.desktop"),
+        ("openswing-dev", "OpenSwing Pitch (dev)", "OpenFlight-openswing-dev-pitch.desktop"),
+    ],
+)
+def test_pitch_launcher_label_and_file_follow_the_checkout(
+    tmp_path, checkout, expected_name, desktop_file
+):
+    home, result = _install(tmp_path, "--pitch", checkout=checkout)
+
+    assert result.returncode == 0, result.stderr
+    entry = (home / "Desktop" / desktop_file).read_text(encoding="utf-8")
+    assert f"Name={expected_name}\n" in entry
+
+
+def test_installer_rejects_unknown_options(tmp_path):
+    home, result = _install(tmp_path, "--pitchh", checkout="openswing")
+
+    assert result.returncode != 0
+    assert "Unknown option: --pitchh" in result.stderr
+    assert not (home / "Desktop").exists()

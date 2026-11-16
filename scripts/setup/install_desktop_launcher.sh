@@ -3,6 +3,20 @@
 
 set -euo pipefail
 
+launcher_mode=golf
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --pitch)
+            launcher_mode=pitch
+            shift
+            ;;
+        *)
+            echo "ERROR: Unknown option: $1 (supported: --pitch)" >&2
+            exit 2
+            ;;
+    esac
+done
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(dirname "$(dirname "$script_dir")")"
 example_launcher="$script_dir/run-openflight.example.sh"
@@ -39,10 +53,19 @@ else
     display_suffix="$install_suffix"
 fi
 
+application_label="OpenSwing"
+application_comment="Softball and golf launch monitor"
+if [[ "$launcher_mode" == pitch ]]; then
+    launcher_name="${launcher_name%.sh}-pitch.sh"
+    desktop_name="${desktop_name%.desktop}-pitch.desktop"
+    application_label="OpenSwing Pitch"
+    application_comment="Fastpitch pitch speed"
+fi
+
 if [[ -n "$display_suffix" ]]; then
-    application_name="OpenSwing ($display_suffix)"
+    application_name="$application_label ($display_suffix)"
 else
-    application_name="OpenSwing"
+    application_name="$application_label"
 fi
 
 launcher_path="${OPENFLIGHT_LAUNCHER_PATH:-$HOME/$launcher_name}"
@@ -76,7 +99,7 @@ trap cleanup EXIT
     printf '%s\n' 'Version=1.0'
     printf '%s\n' 'Type=Application'
     printf 'Name=%s\n' "$application_name"
-    printf '%s\n' 'Comment=Softball and golf launch monitor'
+    printf 'Comment=%s\n' "$application_comment"
     printf 'Exec=/bin/bash -ilc %s\n' "$launcher_path"
     printf 'Path=%s\n' "$project_dir"
     printf 'Icon=%s\n' "$project_dir/ui/public/openswing-icon.svg"
@@ -118,8 +141,19 @@ if [[ ! -e "$launcher_path" ]]; then
         IFS= read -r shebang < "$example_launcher"
         printf '%s\n' "$shebang"
         printf 'openflight_installed_dir=%q\n' "$project_dir"
-        tail -n +2 "$example_launcher"
+        if [[ "$launcher_mode" == pitch ]]; then
+            tail -n +2 "$example_launcher" | awk '
+                { print }
+                $0 == "    --startup-splash" { print "    --pitch-speed"; print "    --pitch-diagnostics" }
+            '
+        else
+            tail -n +2 "$example_launcher"
+        fi
     } > "$temporary_launcher"
+    if [[ "$launcher_mode" == pitch ]] && ! grep -qx -- "    --pitch-speed" "$temporary_launcher"; then
+        echo "ERROR: the example launcher has no '--startup-splash' line to add pitch options after." >&2
+        exit 1
+    fi
     install -m 755 "$temporary_launcher" "$launcher_path"
     rm -f "$temporary_launcher"
     temporary_launcher=""

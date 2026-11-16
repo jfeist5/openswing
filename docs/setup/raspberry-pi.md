@@ -212,6 +212,11 @@ cd ~/openflight
 scripts/setup/install_desktop_launcher.sh
 ```
 
+Add `--pitch` to install a second **OpenSwing Pitch** icon that starts fastpitch
+pitch-speed mode (`--pitch-speed --pitch-diagnostics`). It uses its own wrapper
+script and leaves the regular launcher untouched; both share one lock, so only
+one can run at a time.
+
 The installer uses checkout-specific launcher and desktop filenames, preserving
 multiple OpenFlight installations on the same Pi. Machine-specific device paths
 and calibration remain outside Git. See the
