@@ -28,6 +28,8 @@ export interface ModeFeatures {
   simulateLabelKey: MessageKey | null;
   /** Null means the golf min-speed and magnitude filters, which are disabled in mock mode. */
   speedGates: SpeedGateTuning | null;
+  /** Hint under "Ready" on the empty Live screen. */
+  readyDetailKey: MessageKey;
 }
 
 // Until the server reports its mode, show nothing mode-specific so no golf UI flashes.
@@ -35,12 +37,14 @@ const CONNECTING_FEATURES: ModeFeatures = Object.freeze({
   picker: Object.freeze({ kind: 'none', labelKey: null }),
   simulateLabelKey: null,
   speedGates: null,
+  readyDetailKey: 'live.readyDetail',
 });
 
 const GOLF_FEATURES: ModeFeatures = Object.freeze({
   picker: Object.freeze({ kind: 'club', titleKey: 'app.selectClub', changeKey: 'app.changeClub', wide: false }),
   simulateLabelKey: 'app.simulateShot',
   speedGates: null,
+  readyDetailKey: 'live.readyDetail',
 });
 
 const SWING_SPEED_FEATURES: ModeFeatures = Object.freeze({
@@ -57,6 +61,7 @@ const SWING_SPEED_FEATURES: ModeFeatures = Object.freeze({
     hint: 'Lower speed updates the OPS filter; upper speed rejects implausible high swing-speed outliers.',
     mockNote: 'Mock swing speed sliders shape simulated reps only',
   }),
+  readyDetailKey: 'live.readyDetail',
 });
 
 // Both ranges contain the server's fastpitch defaults (30 and 80 mph).
@@ -69,6 +74,7 @@ const PITCH_SPEED_FEATURES: ModeFeatures = Object.freeze({
     hint: 'Lower speed updates the OPS filter; upper speed rejects implausible high pitch-speed outliers.',
     mockNote: 'Mock pitch speed sliders shape simulated pitches only',
   }),
+  readyDetailKey: 'live.readyDetailPitch',
 });
 
 const FEATURES_BY_MODE: Readonly<Record<MonitorMode, ModeFeatures>> = Object.freeze({

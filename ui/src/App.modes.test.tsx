@@ -105,4 +105,15 @@ describe('App mode features', () => {
     expect(html).not.toContain('panel-header__club');
     expect(html).not.toContain('Simulate');
   });
+
+  it('invites a pitch on the empty pitch-speed screen', () => {
+    const html = renderInMode('pitch-speed');
+
+    expect(html).toContain('Throw a pitch to start the session');
+    expect(html).not.toContain('Start a shot or swing speed session');
+  });
+
+  it('keeps the shot or swing hint on the empty golf screen', () => {
+    expect(renderInMode('rolling-buffer')).toContain('Start a shot or swing speed session');
+  });
 });

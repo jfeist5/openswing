@@ -19,6 +19,7 @@ export const en = {
 
   'live.ready': 'Ready',
   'live.readyDetail': 'Start a shot or swing speed session',
+  'live.readyDetailPitch': 'Throw a pitch to start the session',
   'live.tiRadarFailed': 'TI radar capture failed',
   'live.tiRadarDetail': 'This shot used an estimated launch angle. {reason}',
   'live.dismiss': 'Dismiss',

@@ -23,6 +23,7 @@ describe('getModeFeatures', () => {
       picker: { kind: 'club', titleKey: 'app.selectClub', changeKey: 'app.changeClub', wide: false },
       simulateLabelKey: 'app.simulateShot',
       speedGates: null,
+      readyDetailKey: 'live.readyDetail',
     });
   });
 
@@ -36,6 +37,7 @@ describe('getModeFeatures', () => {
       wide: true,
     });
     expect(features.simulateLabelKey).toBe('app.simulateSwing');
+    expect(features.readyDetailKey).toBe('live.readyDetail');
     expect(features.speedGates?.lower).toEqual({ min: 30, max: 100 });
     expect(features.speedGates?.upper).toEqual({ min: 90, max: 170 });
   });
@@ -45,6 +47,7 @@ describe('getModeFeatures', () => {
 
     expect(features.picker).toEqual({ kind: 'none', labelKey: 'app.pitchSpeed' });
     expect(features.simulateLabelKey).toBe('app.simulatePitch');
+    expect(features.readyDetailKey).toBe('live.readyDetailPitch');
     expect(features.speedGates?.lower).toEqual({ min: 15, max: 60 });
     expect(features.speedGates?.upper).toEqual({ min: 50, max: 100 });
     expect(features.speedGates?.mockNote).toContain('pitch');
@@ -75,6 +78,7 @@ describe('getModeFeatures', () => {
       picker: { kind: 'none', labelKey: null },
       simulateLabelKey: null,
       speedGates: null,
+      readyDetailKey: 'live.readyDetail',
     });
   });
 });

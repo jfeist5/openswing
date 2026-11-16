@@ -268,4 +268,26 @@ describe('LivePanel', () => {
     expect(html).toMatch(/>Best<[\s\S]*?>61\.0</);
     expect(html).toMatch(/>Pitches<[\s\S]*?>3</);
   });
+
+  it('keeps the default ready hint when no mode-specific one is given', () => {
+    expect(render(null)).toContain('Start a shot or swing speed session');
+  });
+
+  it('shows a mode-specific ready hint when given', () => {
+    const html = text(
+      renderToString(
+        <LivePanel
+          shot={null}
+          shots={[]}
+          profileId="james"
+          profileName="James"
+          clubLabel="Pitch Speed"
+          readyDetail="Throw a pitch to start the session"
+        />
+      )
+    );
+
+    expect(html).toContain('Throw a pitch to start the session');
+    expect(html).not.toContain('swing speed session');
+  });
 });

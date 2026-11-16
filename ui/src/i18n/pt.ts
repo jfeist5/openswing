@@ -21,6 +21,7 @@ export const pt: Messages = {
 
   'live.ready': 'Pronto',
   'live.readyDetail': 'Comece uma tacada ou uma sessão de velocidade de swing',
+  'live.readyDetailPitch': 'Faça um arremesso para começar a sessão',
   'live.tiRadarFailed': 'Falha na captura do radar TI',
   'live.tiRadarDetail': 'Esta tacada usou um ângulo de saída estimado. {reason}',
   'live.dismiss': 'Fechar',

@@ -317,6 +317,7 @@ function AppContent() {
                 onSelectMetric={setHeroMetricId}
                 isNewShot={profileIsNewShot}
                 headerAction={liveHeaderActions}
+                readyDetail={t(modeFeatures.readyDetailKey)}
               />
             </ShotProcessingArea>
             {debugMode && <SimShotBadges latestSimShots={latestSimShots} />}

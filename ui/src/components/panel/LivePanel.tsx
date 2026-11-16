@@ -25,6 +25,8 @@ interface LivePanelProps {
   isNewShot?: boolean;
   /** Pinned header control, e.g. Change club. */
   headerAction?: ReactNode;
+  /** Hint under "Ready" before the first shot; defaults to the shot/swing hint. */
+  readyDetail?: string;
 }
 
 /**
@@ -42,6 +44,7 @@ export function LivePanel({
   onSelectMetric,
   isNewShot = false,
   headerAction,
+  readyDetail,
 }: LivePanelProps) {
   const { locale, t } = useI18n();
   const { unitSystem } = useUnitPreference();
@@ -78,7 +81,7 @@ export function LivePanel({
         {header}
         <div className="panel__body panel__body--empty live-panel__empty">
           <span className="panel__empty-title live-panel__empty-title">{t('live.ready')}</span>
-          <span className="panel__empty-detail live-panel__empty-detail">{t('live.readyDetail')}</span>
+          <span className="panel__empty-detail live-panel__empty-detail">{readyDetail ?? t('live.readyDetail')}</span>
         </div>
       </div>
     );
